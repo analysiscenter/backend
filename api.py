@@ -23,13 +23,15 @@ class API_Namespace(Namespace):
         self.emit('ECG_GOT_LIST', payload)
 
     def on_ECG_GET_ITEM_DATA(self, data, meta):
+        print("GET ITEM DATA", data, meta)
         signal = np.random.normal(0, 1, size=30)
-        data['signal'] = signal
+        data['signal'] = signal.tolist()
         payload = dict(event='ECG_GOT_ITEM_DATA', data=data, meta=meta)
         self.emit('ECG_GOT_ITEM_DATA', payload)
 
     def on_ECG_GET_INFERENCE(self, data, meta):
+        print("GET INFERENCE", data, meta)
         inference = np.random.normal(0, 1, size=30)
-        data['inference'] = inference
+        data['inference'] = inference.tolist()
         payload = dict(event='ECG_GOT_ITEM_DATA', data=data, meta=meta)
         self.emit('ECG_GOT_INFERENCE', payload)
