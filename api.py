@@ -3,9 +3,11 @@ from flask_socketio import Namespace
 import numpy as np
 
 from ecg_controller import EcgController
+from ct_controller import CtController
 
-
+# init controller objects
 ecg = EcgController()
+ct = CtController()
 
 class API_Namespace(Namespace):
     def __init__(self, *args, **kwargs):
@@ -39,23 +41,10 @@ class API_Namespace(Namespace):
         self._call_controller_method(ecg.get_inference, "ECG GET INFERENCE", "ECG_GOT_INFERENCE", data, meta)
 
     def on_CT_GET_LIST(self, data, meta):
-        print("CT GET LIST", data, meta)
-        ecg_list = [dict(id=id, name='ct' + str(id)) for id in range(8)]
-        payload = dict(data=ecg_list, meta=meta)
-        self.emit('CT_GOT_LIST', payload)
+        self._call_controller_method(ct.get_list, "CT GET LIST", "CT_GOT_LIST", data, meta)
 
     def on_CT_GET_ITEM_DATA(self, data, meta):
-        print("CT GET ITEM DATA", data, meta)
-        image = np.random.randint(0, 255, size=(32, 64, 64), dtype=np.uint8)
-        image = np.zeros((32, 64, 64), dtype=np.uint8)
-        image[5:10, 10:30, 10:30] = 255
-        data['image'] = image.tolist()
-        payload = dict(data=data, meta=meta)
-        self.emit('CT_GOT_ITEM_DATA', payload)
+        self._call_controller_method(ct.get_item_data, "CT GET ITEM DATA", "CT_GOT_ITEM_DATA", data, meta)
 
     def on_CT_GET_INFERENCE(self, data, meta):
-        print("CT GET INFERENCE", data, meta)
-        inference = np.random.normal(0, 1, size=30)
-        data['inference'] = inference.tolist()
-        payload = dict(data=data, meta=meta)
-        self.emit('CT_GOT_INFERENCE', payload)
+        self._call_controller_method(ct.get_inference, "CT GET INFERENCE", "CT_GOT_INFERENCE", data, meta)
