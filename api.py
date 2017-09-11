@@ -44,8 +44,10 @@ class API_Namespace(Namespace):
 
     def on_CT_GET_ITEM_DATA(self, data, meta):
         print("CT GET ITEM DATA", data, meta)
-        signal = np.random.normal(0, 1, size=30)
-        data['signal'] = signal.tolist()
+        image = np.random.randint(0, 255, size=(32, 64, 64), dtype=np.uint8)
+        image = np.zeros((32, 64, 64), dtype=np.uint8)
+        image[5:10, 10:30, 10:30] = 255
+        data['image'] = image.tolist()
         payload = dict(data=data, meta=meta)
         self.emit('CT_GOT_ITEM_DATA', payload)
 
