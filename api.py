@@ -2,6 +2,10 @@ from flask import request
 from flask_socketio import Namespace
 import numpy as np
 
+from ecg_controller import EcgController
+
+
+ecg = EcgController()
 
 class API_Namespace(Namespace):
     def __init__(self, *args, **kwargs):
@@ -16,25 +20,23 @@ class API_Namespace(Namespace):
         print("User disconnected", request, request.sid)
         pass
 
+    def _call_controller_method(self, method, event_in, event_out, data, meta):
+        print(event_in, data, meta)
+        try:
+            payload = method(data, meta)
+        except Exception as e:
+            self.emit("ERROR", str(e))
+        else:
+            self.emit(event_out, payload)
+
     def on_ECG_GET_LIST(self, data, meta):
-        print("ECG GET LIST", data, meta)
-        ecg_list = [dict(id=id, name='ecg' + str(id)) for id in range(8)]
-        payload = dict(data=ecg_list, meta=meta)
-        self.emit('ECG_GOT_LIST', payload)
+        self._call_controller_method(ecg.get_list, "ECG GET LIST", "ECG_GOT_LIST", data, meta)
 
     def on_ECG_GET_ITEM_DATA(self, data, meta):
-        print("ECG GET ITEM DATA", data, meta)
-        signal = np.random.normal(0, 1, size=30)
-        data['signal'] = signal.tolist()
-        payload = dict(data=data, meta=meta)
-        self.emit('ECG_GOT_ITEM_DATA', payload)
+        self._call_controller_method(ecg.get_item_data, "ECG GET ITEM DATA", "ECG_GOT_ITEM_DATA", data, meta)
 
     def on_ECG_GET_INFERENCE(self, data, meta):
-        print("ECG GET INFERENCE", data, meta)
-        inference = np.random.normal(0, 1, size=30)
-        data['inference'] = inference.tolist()
-        payload = dict(data=data, meta=meta)
-        self.emit('ECG_GOT_INFERENCE', payload)
+        self._call_controller_method(ecg.get_inference, "ECG GET INFERENCE", "ECG_GOT_INFERENCE", data, meta)
 
     def on_CT_GET_LIST(self, data, meta):
         print("CT GET LIST", data, meta)
