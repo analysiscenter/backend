@@ -1,0 +1,3 @@
+[submodule "ecg"]
+	path = ecg
+	url = https://github.com/analysiscenter/ecg.git
