@@ -25,6 +25,7 @@ class API_Namespace(Namespace):
         try:
             payload = method(data, meta)
         except Exception as e:
+            print("ERROR", method.__name__, data, meta)
             self.emit("ERROR", str(e))
         else:
             self.emit(event_out, payload)

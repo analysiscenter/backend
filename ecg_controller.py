@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from ecg import ds, ModelEcgBatch
 from ecg.ecg import models
-sys.modules['ecg.models'] = models
+sys.modules["ecg.models"] = models
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 class EcgController:
