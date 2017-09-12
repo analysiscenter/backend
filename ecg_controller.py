@@ -20,15 +20,15 @@ class EcgController:
             "6": "A00013.hea",
         }
 
-        dirichlet_path = os.path.join(os.getcwd(), "data", "ecg_models", "dirichlet")
-        dirichlet_last_path = tf.train.latest_checkpoint(dirichlet_path)
+        dirichlet_path = os.path.join(os.getcwd(), "data", "ecg_models", "dirichlet", "dirichlet-34000")
         dirichlet_config = {
-            "graph_path": dirichlet_last_path + ".meta",
-            "checkpoint_path": dirichlet_last_path,
-            "classes_path": dirichlet_last_path + ".dill"
+            "graph_path": dirichlet_path + ".meta",
+            "checkpoint_path": dirichlet_path,
+            "classes_path": dirichlet_path + ".dill"
         }
+        hmm_path = os.path.join(os.getcwd(), "data", "ecg_models", "hmm", "HMMAnnotation.dill")
         hmm_config = {
-            "path": os.path.join(os.getcwd(), "data", "ecg_models", "hmm", "HMMAnnotation.dill"),
+            "path": hmm_path,
         }
         config = {
             "dirichlet_pretrained": dirichlet_config,
@@ -96,4 +96,5 @@ class EcgController:
             inference[k] = inference[k].tolist()
         (eds >> self.ppl_predict_af).run()
         inference["af_prob"] = float(self.ppl_predict_af.get_variable("af_prediction")[0]["target_pred"]["A"])
-        return dict(data={**data, **inference}, meta=meta)
+        data["inference"] = inference
+        return dict(data=data, meta=meta)
