@@ -107,8 +107,8 @@ class CtController:
         bch_scan, bch_predicted = CTIMB(bch.index), CTIB(bch.index)
         args_load = dict(fmt='ndarray', origin=bch.origin, spacing=bch.spacing, bounds=bch._bounds)
 
-        bch_scan.load({**args_load, 'source': bch.images})
-        bch_predicted.load({**args_load, 'source': bch.masks})
+        bch_scan.load(**args_load, source=bch.images)
+        bch_predicted.load(**args_load, source=bch.masks)
 
         # load nodules info and resize batches for rendering
         bch_scan.fetch_nodules_info(nodules_df)
