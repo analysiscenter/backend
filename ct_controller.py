@@ -16,7 +16,7 @@ config = {'loss': unet_loss, 'path': unet_path}
 # chosen id-nums
 ixs_nums = np.array([714, 297, 299, 672])
 lunaix = FilesIndex(path= '/notebooks/data/MRT/luna/s*/*.mhd', no_ext=True)
-ixs_arr = lunaix.indices(ixs_nums)
+ixs_arr = lunaix.indices[ixs_nums]
 all_ixs = lunaix.create_subset(ixs_arr)
 
 # args of actions in pipelines
