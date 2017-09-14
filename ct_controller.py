@@ -34,8 +34,7 @@ class CtController:
         # load and resize scan to low res for render
         self.ppl_render_scan = (Pipeline()
                                     .load(fmt='blosc', src_blosc=['images', 'spacing', 'origin'])
-                                    .resize(shape=RENDER_SHAPE)
-                                    .normalize_hu())
+                                    .resize(shape=RENDER_SHAPE))
 
         # load scan and perform inference
         args_uspacing = dict(shape=USPACING_SHAPE, spacing=SPACING, method=METHOD)
