@@ -2,22 +2,17 @@ import os
 import sys
 import numpy as np
 import pandas as pd
+from time import sleep
 
 from lung_cancer.dataset import FilesIndex, Pipeline, Dataset
 from lung_cancer import CTImagesModels as CTIM
 from lung_cancer import CTImagesBatch as CTIB
 from lung_cancer import CTImagesMaskedBatch as CTIMB
+from tqdm import tqdm
 
-# model config
-unet_path = '/notebooks/segm/analysis/conf/model_best_unet_tiversky_2017-8-4-21-57.hdf5'
-unet_loss = 'tiversky'
-config = {'loss': unet_loss, 'path': unet_path}
-
-# chosen id-nums
-ixs_nums = np.array([714, 297, 299, 672])
-lunaix = FilesIndex(path= '/notebooks/data/MRT/luna/s*/*.mhd', no_ext=True)
-ixs_arr = lunaix.indices[ixs_nums]
-all_ixs = lunaix.create_subset(ixs_arr)
+# chosen ixs
+lunapath = os.path.join('.', 'data', 'ct', 'scans', '*')
+all_ixs = FilesIndex(path=lunapath, dirs=True)
 
 # args of actions in pipelines
 # item demonstration
@@ -28,7 +23,7 @@ USPACING_SHAPE = (300, 400, 400)
 SPACING = (1., 1., 1.)
 METHOD = 'scipy'
 STRIDES = (32, 64, 64)
-nodules_df = pd.read_csv('/notebooks/data/MRT/luna/CSVFILES/annotations.csv')
+nodules_df = pd.read_csv(os.path.join('.', 'data', 'ct', 'annotations', 'annotations.csv'))
 
 class CtController:
     def __init__(self):
@@ -36,23 +31,19 @@ class CtController:
         self.ct_names = dict(zip([str(i) for i in range(len(all_ixs))], all_ixs.indices))
 
         # pipelines
-
         # load and resize scan to low res for render
         self.ppl_render_scan = (Pipeline()
-                                    .load(fmt='raw')
+                                    .load(fmt='blosc', src_blosc=['images', 'spacing', 'origin'])
                                     .resize(shape=RENDER_SHAPE)
                                     .normalize_hu())
 
         # load scan and perform inference
         args_uspacing = dict(shape=USPACING_SHAPE, spacing=SPACING, method=METHOD)
-        args_pred_on_scan = dict(model_name='keras_unet', strides=STRIDES,
-                                 dim_ordering='channels_first', y_component='masks')
+
         # note that this pipeline puts predictions in masks-component
-        self.ppl_predict_scan = (Pipeline(config=config)
-                                    .load(fmt='raw')
-                                    .unify_spacing(**args_uspacing)
-                                    .double_normalize_hu()
-                                    .predict_on_scan(**args_pred_on_scan))
+        self.ppl_predict_scan = (Pipeline()
+                                    .load(fmt='blosc', src_blosc=['images', 'masks', 'spacing', 'origin'])
+                                    .fetch_nodules_info(nodules_df))
 
     def build_item_ds(self, data):
         """ Auxilliary method for building dataset from one elem.
@@ -74,7 +65,7 @@ class CtController:
     def get_list(self, data, meta):
         """ Correspondence between ids and frontend names.
         """
-        ct_list = [dict(name='Patient ' + key, id=key) for key in self.ct_names]
+        ct_list = [dict(name='Patient ' + key, id=key) for key in sorted(self.ct_names)]
         return dict(data=ct_list, meta=meta)
 
     def get_item_data(self, data, meta):
@@ -89,6 +80,7 @@ class CtController:
         item_ds = self.build_item_ds(data)
         bch = (item_ds >> self.ppl_render_scan).next_batch(1)
         item_data = dict(image=bch.images.tolist())
+        print(bch.images.dtype)
 
         # update and fetch the data-dict along with meta
         return dict(data={**item_data, **data}, meta=meta)
@@ -103,24 +95,16 @@ class CtController:
         item_ds = self.build_item_ds(data)
         bch = (item_ds >> self.ppl_predict_scan).next_batch(1)
 
-        # create two batches from masked batch for resize
-        bch_scan, bch_predicted = CTIMB(bch.index), CTIB(bch.index)
-        args_load = dict(fmt='ndarray', origin=bch.origin, spacing=bch.spacing, bounds=bch._bounds)
-
-        bch_scan.load(**args_load, source=bch.images)
-        bch_predicted.load(**args_load, source=bch.masks)
-
-        # load nodules info and resize batches for rendering
-        bch_scan.fetch_nodules_info(nodules_df)
-        bch_scan = bch_scan.resize(shape=RENDER_SHAPE)
-        bch_predicted = bch_predicted.resize(shape=RENDER_SHAPE)
+        bch.images = bch.masks
+        bch.masks = None
+        bch.resize(shape=RENDER_SHAPE)
 
         # nodules info in pixel coords
-        nodules = (bch_scan.nodules.nodule_center - bch_scan.nodules.origin) / bch_scan.nodules.spacing
-        diams = bch_scan.nodules.nodule_size / bch_scan.nodules.spacing
+        nodules = (bch.nodules.nodule_center - bch.nodules.origin) / bch.nodules.spacing
+        diams = bch.nodules.nodule_size / bch.nodules.spacing
         nodules = np.hstack([nodules, diams])
-
-        item_data = dict(mask=bch_predicted.images.tolist(), nodules=nodules.tolist())
-
+        item_data = dict(mask=bch.images.tolist(), nodules=nodules.tolist())
         # update and fetch data dict
-        return dict(data={**item_data, **data}, meta=meta)
+        print('DONE PREDICTING')
+        res = dict(data={**item_data, **data}, meta=meta)
+        return res
