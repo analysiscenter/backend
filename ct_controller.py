@@ -95,14 +95,14 @@ class CtController:
         item_ds = self.build_item_ds(data)
         bch = (item_ds >> self.ppl_predict_scan).next_batch(1)
 
-        bch.images = bch.masks
+        bch.images = bch.masks * 255
         bch.masks = None
         bch.resize(shape=RENDER_SHAPE)
 
         # nodules info in pixel coords
         nodules = (bch.nodules.nodule_center - bch.nodules.origin) / bch.nodules.spacing
         diams = bch.nodules.nodule_size / bch.nodules.spacing
-        nodules = np.hstack([nodules, diams])
+        nodules = np.rint(np.hstack([nodules, diams])).astype(np.int)
         item_data = dict(mask=bch.images.tolist(), nodules=nodules.tolist())
         # update and fetch data dict
         print('DONE PREDICTING')
