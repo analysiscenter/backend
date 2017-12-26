@@ -33,7 +33,7 @@ class CtController:
         # pipelines
         # load and resize scan to low res for render
         self.ppl_render_scan = (Pipeline()
-                                    .load(fmt='blosc', src_blosc=['images', 'spacing', 'origin'])
+                                    .load(fmt='blosc', components=['images', 'spacing', 'origin'])
                                     .resize(shape=RENDER_SHAPE))
 
         # load scan and perform inference
@@ -41,7 +41,7 @@ class CtController:
 
         # note that this pipeline puts predictions in masks-component
         self.ppl_predict_scan = (Pipeline()
-                                    .load(fmt='blosc', src_blosc=['images', 'masks', 'spacing', 'origin'])
+                                    .load(fmt='blosc', components=['images', 'masks', 'spacing', 'origin'])
                                     .fetch_nodules_info(nodules_df))
 
     def build_item_ds(self, data):
