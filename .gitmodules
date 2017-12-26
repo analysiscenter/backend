@@ -1,3 +1,6 @@
 [submodule "ecg"]
 	path = ecg
 	url = https://github.com/analysiscenter/ecg.git
+[submodule "lung_cancer"]
+	path = lung_cancer
+	url = https://github.com/analysiscenter/lung_cancer.git
