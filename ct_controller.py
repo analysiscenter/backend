@@ -95,7 +95,7 @@ class CtController:
 
         # nodules info in pixel coords
         nodules = (bch.nodules.nodule_center - bch.nodules.origin) / bch.nodules.spacing
-        diams = bch.nodules.nodule_size / bch.nodules.spacing
+        diams = np.ceil(bch.nodules.nodule_size / bch.nodules.spacing)
         nodules = np.rint(np.hstack([nodules, diams])).astype(np.int)
         item_data = dict(mask=bch.images.tolist(), nodules=nodules.tolist())
         # update and fetch data dict
