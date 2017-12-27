@@ -1,22 +1,12 @@
 import os
 import sys
 import re
-from functools import partial
-
-import numpy as np
 
 sys.path.append("./ecg/")
 from cardio import dataset as ds
-from cardio.dataset import B, V
 from cardio import EcgDataset
-from cardio.models import HMModel, DirichletModel, concatenate_ecg_batch
+from cardio.pipelines import dirichlet_predict_pipeline, hmm_predict_pipeline
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-
-def prepare_batch(batch, model):
-    X = np.concatenate([hmm_features[0].T for hmm_features in batch.hmm_features])
-    lengths = [hmm_features.shape[2] for hmm_features in batch.hmm_features]
-    return {"X": X, "lengths": lengths}
 
 
 class EcgController:
@@ -35,38 +25,11 @@ class EcgController:
               .run(batch_size=BATCH_SIZE, shuffle=False, drop_last=False, n_epochs=1, lazy=True)
         )
 
-        dirichlet_config = {
-            "build": False,
-            "load": {"path": os.path.join(os.getcwd(), "data", "ecg_models", "dirichlet")},
-        }
+        dirichlet_path = os.path.join(os.getcwd(), "data", "ecg_models", "dirichlet")
+        self.ppl_predict_af = dirichlet_predict_pipeline(dirichlet_path, batch_size=BATCH_SIZE)
 
-        self.ppl_predict_af = (
-            ds.Pipeline()
-              .init_model("static", DirichletModel, name="dirichlet", config=dirichlet_config)
-              .init_variable("predictions_list", init_on_each_run=list)
-              .load(fmt="wfdb", components=["signal", "meta"])
-              .flip_signals()
-              .split_signals(2048, 2048)
-              .predict_model("dirichlet", make_data=partial(concatenate_ecg_batch, return_targets=False),
-                             fetches="predictions", save_to=V("predictions_list"), mode="e")
-              .run(batch_size=BATCH_SIZE, shuffle=False, drop_last=False, n_epochs=1, lazy=True)
-        )
-
-        hmm_config = {
-            "build": False,
-            "load": {"path": os.path.join(os.getcwd(), "data", "ecg_models", "hmm", "hmm_model_old.dill")}
-        }
-
-        self.ppl_predict_states = (
-            ds.Pipeline()
-              .init_model("static", HMModel, name="HMM", config=hmm_config)
-              .load(fmt="wfdb", components=["signal", "meta"])
-              .cwt(src="signal", dst="hmm_features", scales=[4, 8, 16], wavelet="mexh")
-              .standartize(axis=-1, src="hmm_features", dst="hmm_features")
-              .predict_model("HMM", make_data=prepare_batch, save_to=B("hmm_annotation"))
-              .calc_ecg_parameters(src="hmm_annotation")
-              .run(batch_size=BATCH_SIZE, shuffle=False, drop_last=False, n_epochs=1, lazy=True)
-        )
+        hmm_path = os.path.join(os.getcwd(), "data", "ecg_models", "hmm", "hmm_model_old.dill")
+        self.ppl_predict_states = hmm_predict_pipeline(hmm_path, batch_size=BATCH_SIZE)
 
     def build_ds(self, data):
         ecg_id = data.get("id")
