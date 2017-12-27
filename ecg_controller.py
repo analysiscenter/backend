@@ -1,39 +1,30 @@
 import os
 import sys
+import re
+from functools import partial
 
-import tensorflow as tf
+import numpy as np
 
-from ecg import ds, ModelEcgBatch
-from ecg.ecg import models
-sys.modules["ecg.models"] = models
+sys.path.append("./ecg/")
+from cardio import dataset as ds
+from cardio.dataset import B, V
+from cardio import EcgDataset
+from cardio.models import HMModel, DirichletModel, concatenate_ecg_batch
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+
+def prepare_batch(batch, model):
+    X = np.concatenate([hmm_features[0].T for hmm_features in batch.hmm_features])
+    lengths = [hmm_features.shape[2] for hmm_features in batch.hmm_features]
+    return {"X": X, "lengths": lengths}
+
 
 class EcgController:
     def __init__(self):
         self.ecg_path = os.path.join(os.getcwd(), "data", "ecg_data")
-        self.ecg_names = {
-            "1": "A00001.hea",
-            "2": "A00002.hea",
-            "3": "A00004.hea",
-            "4": "A00005.hea",
-            "5": "A00008.hea",
-            "6": "A00013.hea",
-        }
-
-        dirichlet_path = os.path.join(os.getcwd(), "data", "ecg_models", "dirichlet", "dirichlet-34000")
-        dirichlet_config = {
-            "graph_path": dirichlet_path + ".meta",
-            "checkpoint_path": dirichlet_path,
-            "classes_path": dirichlet_path + ".dill"
-        }
-        hmm_path = os.path.join(os.getcwd(), "data", "ecg_models", "hmm", "HMMAnnotation.dill")
-        hmm_config = {
-            "path": hmm_path,
-        }
-        config = {
-            "dirichlet_pretrained": dirichlet_config,
-            "hmm_annotation_pretrained": hmm_config,
-        }
+        ecg_names = [f for f in sorted(os.listdir(self.ecg_path)) if re.match(r"A.*\.hea", f)]
+        key_len = len(str(len(ecg_names) + 1))
+        self.ecg_names = {str(i + 1).zfill(key_len): f for i, f in enumerate(ecg_names)}
 
         BATCH_SIZE = 1
 
@@ -41,29 +32,39 @@ class EcgController:
             ds.Pipeline()
               .load(fmt='wfdb', components=["signal", "meta"])
               .flip_signals()
-              .get_signal_meta(var_name="signal")
               .run(batch_size=BATCH_SIZE, shuffle=False, drop_last=False, n_epochs=1, lazy=True)
         )
+
+        dirichlet_config = {
+            "build": False,
+            "load": {"path": os.path.join(os.getcwd(), "data", "ecg_models", "dirichlet")},
+        }
 
         self.ppl_predict_af = (
-            ds.Pipeline(config=config)
-              .init_model("dirichlet_pretrained")
+            ds.Pipeline()
+              .init_model("static", DirichletModel, name="dirichlet", config=dirichlet_config)
+              .init_variable("predictions_list", init_on_each_run=list)
               .load(fmt="wfdb", components=["signal", "meta"])
               .flip_signals()
-              .segment_signals(2048, 512)
-              .predict_on_batch("dirichlet_pretrained", predictions_var_name="af_prediction")
+              .split_signals(2048, 2048)
+              .predict_model("dirichlet", make_data=partial(concatenate_ecg_batch, return_targets=False),
+                             fetches="predictions", save_to=V("predictions_list"), mode="e")
               .run(batch_size=BATCH_SIZE, shuffle=False, drop_last=False, n_epochs=1, lazy=True)
         )
 
+        hmm_config = {
+            "build": False,
+            "load": {"path": os.path.join(os.getcwd(), "data", "ecg_models", "hmm", "hmm_model_old.dill")}
+        }
+
         self.ppl_predict_states = (
-            ds.Pipeline(config=config)
-              .init_model("hmm_annotation_pretrained")
-              .load(fmt='wfdb', components=["signal", "annotation", "meta"])
-              .flip_signals()
-              .generate_hmm_features(cwt_scales=[4, 8, 16], cwt_wavelet="mexh")
-              .predict_on_batch("hmm_annotation_pretrained")
-              .calc_ecg_parameters()
-              .get_signal_annotation_results(var_name="states_prediction")
+            ds.Pipeline()
+              .init_model("static", HMModel, name="HMM", config=hmm_config)
+              .load(fmt="wfdb", components=["signal", "meta"])
+              .cwt(src="signal", dst="hmm_features", scales=[4, 8, 16], wavelet="mexh")
+              .standartize(axis=-1, src="hmm_features", dst="hmm_features")
+              .predict_model("HMM", make_data=prepare_batch, save_to=B("hmm_annotation"))
+              .calc_ecg_parameters(src="hmm_annotation")
               .run(batch_size=BATCH_SIZE, shuffle=False, drop_last=False, n_epochs=1, lazy=True)
         )
 
@@ -72,29 +73,35 @@ class EcgController:
         ecg_name = self.ecg_names.get(ecg_id)
         if ecg_id is None or ecg_name is None:
             raise ValueError("Invalid ecg name")
-        index = ds.FilesIndex(path=os.path.join(self.ecg_path, ecg_name), no_ext=True, sort=True)
-        eds = ds.Dataset(index, batch_class=ModelEcgBatch)
+        eds = EcgDataset(path=os.path.join(self.ecg_path, ecg_name), no_ext=True, sort=True)
         return eds
 
     def get_list(self, data, meta):
-        ecg_list = [dict(id=k, name="Patient " + self.ecg_names[k].split(".")[0]) for k in sorted(self.ecg_names)]
+        ecg_list = [dict(id=k, name=self.ecg_names[k].split(".")[0]) for k in sorted(self.ecg_names)]
         return dict(data=ecg_list, meta=meta)
 
     def get_item_data(self, data, meta):
         eds = self.build_ds(data)
-        (eds >> self.ppl_load_signal).run()
-        item_data = self.ppl_load_signal.get_variable("signal")[0]
-        item_data["signal"] = item_data["signal"].ravel().tolist()
-        item_data["units"] = item_data["units"][0]
-        return dict(data={**data, **item_data}, meta=meta)
+        batch = (eds >> self.ppl_load_signal).next_batch()
+        data["signal"] = batch.signal[0].ravel().tolist()
+        data["frequency"] = batch.meta[0]["fs"]
+        data["units"] = batch.meta[0]["units"][0]
+        return dict(data=data, meta=meta)
 
     def get_inference(self, data, meta):
         eds = self.build_ds(data)
-        (eds >> self.ppl_predict_states).run()
-        inference = self.ppl_predict_states.get_variable("states_prediction")[0]
-        for k in ("p_segments", "t_segments", "qrs_segments"):
-            inference[k] = inference[k].tolist()
-        (eds >> self.ppl_predict_af).run()
-        inference["af_prob"] = float(self.ppl_predict_af.get_variable("af_prediction")[0]["target_pred"]["A"])
+        batch = (eds >> self.ppl_predict_states).next_batch()
+        signal_meta = batch.meta[0]
+        inference = {
+            "heart_rate": signal_meta["hr"],
+            "qrs_interval": signal_meta["qrs"],
+            "qt_interval": signal_meta["qt"],
+            "pq_interval": signal_meta["pq"],
+            "p_segments": signal_meta["p_segments"].tolist(),
+            "t_segments": signal_meta["t_segments"].tolist(),
+            "qrs_segments": signal_meta["qrs_segments"].tolist(),
+        }
+        ppl_predict_af = (eds >> self.ppl_predict_af).run()
+        inference["af_prob"] = float(ppl_predict_af.get_variable("predictions_list")[0]["target_pred"]["A"])
         data["inference"] = inference
         return dict(data=data, meta=meta)

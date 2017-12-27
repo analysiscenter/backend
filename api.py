@@ -1,11 +1,12 @@
+import numpy as np
 from flask import request
 from flask_socketio import Namespace
-import numpy as np
 
 from ecg_controller import EcgController
 
 
 ecg = EcgController()
+
 
 class API_Namespace(Namespace):
     def __init__(self, *args, **kwargs):
