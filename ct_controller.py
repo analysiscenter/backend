@@ -1,14 +1,9 @@
 import os
-import sys
 import numpy as np
 import pandas as pd
-from time import sleep
 
 from lung_cancer.dataset import FilesIndex, Pipeline, Dataset
-from lung_cancer import CTImagesModels as CTIM
-from lung_cancer import CTImagesBatch as CTIB
 from lung_cancer import CTImagesMaskedBatch as CTIMB
-from tqdm import tqdm
 
 # chosen ixs
 lunapath = os.path.join('.', 'data', 'ct', 'scans', '*')
@@ -59,7 +54,7 @@ class CtController:
         ix_arr = np.asarray([self.ct_names.get(item_id)])
         ix = all_ixs.create_subset(ix_arr)
 
-        return Dataset(index=ix, batch_class=CTIM)
+        return Dataset(index=ix, batch_class=CTIMB)
 
     def get_list(self, data, meta):
         """ Correspondence between ids and frontend names.
