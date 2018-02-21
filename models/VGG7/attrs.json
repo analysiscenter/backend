@@ -1,0 +1,1 @@
+["is_training", "global_step", "images", "labels", "targets", "predictions", "output_labels", "output_proba", "output_accuracy", "loss", "train_step"]

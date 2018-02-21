@@ -4,3 +4,6 @@
 [submodule "lung_cancer"]
 	path = lung_cancer
 	url = https://github.com/analysiscenter/lung_cancer.git
+[submodule "meters"]
+	path = meters
+	url = https://github.com/analysiscenter/meters.git

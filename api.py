@@ -2,12 +2,17 @@ import numpy as np
 from flask import request
 from flask_socketio import Namespace
 
-from ecg_controller import EcgController
-from ct_controller import CtController
+#from ecg_controller import EcgController
+#from ct_controller import CtController
+from mt_controller import MtController
 
 # init controller objects
-ecg = EcgController()
-ct = CtController()
+#ecg = EcgController()
+#ct = CtController()
+
+ecg = MtController()
+ct = MtController()
+mt = MtController()
 
 
 class API_Namespace(Namespace):
@@ -41,6 +46,16 @@ class API_Namespace(Namespace):
 
     def on_ECG_GET_INFERENCE(self, data, meta):
         self._call_controller_method(ecg.get_inference, "ECG GET INFERENCE", "ECG_GOT_INFERENCE", data, meta)
+
+    def on_MT_GET_LIST(self, data, meta):
+        print('on_MT_GET_LIST')
+        self._call_controller_method(mt.get_list, "MT GET LIST", "MT_GOT_LIST", data, meta)
+
+    def on_MT_GET_ITEM_DATA(self, data, meta):
+        self._call_controller_method(mt.get_item_data, "MT GET ITEM DATA", "MT_GOT_ITEM_DATA", data, meta)
+
+    def on_MT_GET_INFERENCE(self, data, meta):
+        self._call_controller_method(mt.get_inference, "MT GET INFERENCE", "MT_GOT_INFERENCE", data, meta)
 
     def on_CT_GET_LIST(self, data, meta):
         self._call_controller_method(ct.get_list, "CT GET LIST", "CT_GOT_LIST", data, meta)
