@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import numpy as np
+import base64
 
 from imageio import imread
 from skimage.transform import resize
@@ -95,7 +96,7 @@ class MtController:
 
     def get_item_data(self, data, meta):
         print('MtController get_item_data CALLED')
-        image = self._read_image(data['id'])
+#        image = self._read_image(data['id'])
 
         #-----------------
         # dset = self.build_ds(data)
@@ -112,8 +113,11 @@ class MtController:
         # print('add BBOX OK')
         #-----------------
 
-        image = resize(image, self.output_shape , preserve_range=True)
-        data['img'] = image.ravel().tolist()
+ #       image = resize(image, self.output_shape , preserve_range=True)
+ #       data['img'] = image.ravel().tolist()
+        with open(os.path.join(self.meters_path, image_id), 'rb') as f:
+            img = base64.b64encode(bytearray(f.read()))
+        data['img'] = img
         data['height'] = image.shape[0]
         data['width'] = image.shape[1]
         return dict(data=data, meta=meta)
@@ -122,6 +126,7 @@ class MtController:
         print('MtController get_inference CALLED')
 
         image = self._read_image(data['id'])
+        self.output_shape = image.shape[:2]
         dset = self.build_ds(data)
         pred = self.predict_pipeline << dset
         pred.next_batch(1)

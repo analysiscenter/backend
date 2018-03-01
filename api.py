@@ -2,6 +2,8 @@ import numpy as np
 from flask import request
 from flask_socketio import Namespace
 
+from time import time
+
 #from ecg_controller import EcgController
 #from ct_controller import CtController
 from mt_controller import MtController
@@ -36,6 +38,15 @@ class API_Namespace(Namespace):
             print("ERROR", method.__name__, data, meta)
             self.emit("ERROR", str(e))
         else:
+            print('+'*25 + 'EMIT' + '+'*25)
+            print('time', time)
+            print('method', method)
+            print('in', event_in)
+            print('out', event_out)
+            if isinstance(data, list):
+                print('data', len(data))
+            print('meta', meta)
+            print('-'*55)
             self.emit(event_out, payload)
 
     def on_ECG_GET_LIST(self, data, meta):

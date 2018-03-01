@@ -11,4 +11,4 @@ socketio.on_namespace(API_Namespace('/api'))
 
 if __name__ == '__main__':
     print("Run app")
-    socketio.run(app, port=9090)
+    socketio.run(app, host='0.0.0.0', port=9090)
