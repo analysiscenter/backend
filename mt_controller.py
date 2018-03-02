@@ -96,8 +96,8 @@ class MtController:
 
     def get_item_data(self, data, meta):
         print('MtController get_item_data CALLED')
-#        image = self._read_image(data['id'])
-
+        image = self._read_image(data['id'])
+        print('--------------------- image read')
         #-----------------
         # dset = self.build_ds(data)
         # print('dataset OK')
@@ -115,11 +115,16 @@ class MtController:
 
  #       image = resize(image, self.output_shape , preserve_range=True)
  #       data['img'] = image.ravel().tolist()
+        image_id = data['id']
+        print('-'*10+'reading' + os.path.join(self.meters_path, image_id))
         with open(os.path.join(self.meters_path, image_id), 'rb') as f:
             img = base64.b64encode(bytearray(f.read()))
-        data['img'] = img
-        data['height'] = image.shape[0]
+        print('-'*10 + 'success')
+        data['src'] = img
+        print('wrote to src')
+        data['height'] = image.shape[0] 
         data['width'] = image.shape[1]
+        print('wrote shape')
         return dict(data=data, meta=meta)
 
     def get_inference(self, data, meta):
@@ -128,9 +133,15 @@ class MtController:
         image = self._read_image(data['id'])
         self.output_shape = image.shape[:2]
         dset = self.build_ds(data)
+        print('dataset has been built')
         pred = self.predict_pipeline << dset
+        print('created pred')
         pred.next_batch(1)
-        bbox = pred.get_variable('bbox_predictions')[0] * np.tile(self.output_shape, 2) / np.tile(image.shape[1::-1], 2)
+        print('got next batch')
+        print('------------\n', pred.get_variable('bbox_predictions')[0], '----------')
+        print(image.shape, image.shape[1::-1])
+        bbox = pred.get_variable('bbox_predictions')[0]
+        #bbox = pred.get_variable('bbox_predictions')[0] * np.tile(self.output_shape, 2) / np.tile(image.shape[1::-1], 2)
         labels = pred.get_variable('labels')
 
         inference = {
