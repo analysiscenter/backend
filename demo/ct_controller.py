@@ -2,11 +2,13 @@ import os
 import numpy as np
 import pandas as pd
 
-from lung_cancer.dataset import FilesIndex, Pipeline, Dataset
-from lung_cancer import CTImagesMaskedBatch as CTIMB
+from .lung_cancer.dataset import FilesIndex, Pipeline, Dataset
+from .lung_cancer import CTImagesMaskedBatch as CTIMB
+
+CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
 
 # chosen ixs
-lunapath = os.path.join('.', 'data', 'ct', 'scans', '*')
+lunapath = os.path.join(CURRENT_PATH, 'data', 'ct', 'scans', '*')
 all_ixs = FilesIndex(path=lunapath, dirs=True)
 
 # args of actions in pipelines
@@ -18,7 +20,7 @@ USPACING_SHAPE = (300, 400, 400)
 SPACING = (1., 1., 1.)
 METHOD = 'scipy'
 STRIDES = (32, 64, 64)
-nodules_df = pd.read_csv(os.path.join('.', 'data', 'ct', 'annotations', 'annotations.csv'))
+nodules_df = pd.read_csv(os.path.join(CURRENT_PATH, 'data', 'ct', 'annotations', 'annotations.csv'))
 
 class CtController:
     def __init__(self):

@@ -2,7 +2,8 @@ import os
 import sys
 import re
 
-sys.path.append("./ecg/")
+CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(1, os.path.join(CURRENT_PATH, "ecg"))
 from cardio import dataset as ds
 from cardio import EcgDataset
 from cardio.pipelines import dirichlet_predict_pipeline, hmm_predict_pipeline
@@ -11,7 +12,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 class EcgController:
     def __init__(self):
-        self.ecg_path = os.path.join(os.getcwd(), "data", "ecg_data")
+        self.ecg_path = os.path.join(CURRENT_PATH, "data", "ecg_data")
         ecg_names = [f for f in sorted(os.listdir(self.ecg_path)) if re.match(r"A.*\.hea", f)]
         key_len = len(str(len(ecg_names) + 1))
         self.ecg_names = {str(i + 1).zfill(key_len): f for i, f in enumerate(ecg_names)}
@@ -25,10 +26,10 @@ class EcgController:
               .run(batch_size=BATCH_SIZE, shuffle=False, drop_last=False, n_epochs=1, lazy=True)
         )
 
-        dirichlet_path = os.path.join(os.getcwd(), "data", "ecg_models", "dirichlet")
+        dirichlet_path = os.path.join(CURRENT_PATH, "data", "ecg_models", "dirichlet")
         self.ppl_predict_af = dirichlet_predict_pipeline(dirichlet_path, batch_size=BATCH_SIZE)
 
-        hmm_path = os.path.join(os.getcwd(), "data", "ecg_models", "hmm", "hmm_model_old.dill")
+        hmm_path = os.path.join(CURRENT_PATH, "data", "ecg_models", "hmm", "hmm_model_old.dill")
         self.ppl_predict_states = hmm_predict_pipeline(hmm_path, batch_size=BATCH_SIZE)
 
     def build_ds(self, data):

@@ -1,9 +1,8 @@
-import numpy as np
 from flask import request
 from flask_socketio import Namespace
 
-from ecg_controller import EcgController
-from ct_controller import CtController
+from .ecg_controller import EcgController
+from .ct_controller import CtController
 
 # init controller objects
 ecg = EcgController()
