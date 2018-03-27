@@ -22,41 +22,43 @@ class API_Namespace(Namespace):
     def on_disconnect(self):
         print("User disconnected", request, request.sid)
 
-    def on_ECG_GET_LIST(self, data, meta):
-        print("ECG_GET_LIST", data, meta)
+    def _safe_call(self, method, data, meta, event_in, event_out):
+        print(event_in, data, meta)
         try:
-            data = []
-            for sha in self.data:
-                signal_data = {
-                    "id": sha,
-                    "timestamp": self.data[sha]["meta"]["timestamp"],
-                    "is_annotated": len(self.data[sha]["annotation"]),
-                }
-                data.append(signal_data)
-            data = sorted(data, key=lambda val: val["timestamp"], reverse=True)
-            for d in data:
-                d["timestamp"] = d["timestamp"].strftime("%d.%m.%Y %H:%M:%S")
-            payload = dict(data=data, meta=meta)
+            payload = method(data, meta)
         except Exception as e:
-            print("ERROR ECG_GET_LIST", data, meta)
+            print("ERROR " + event_in, data, meta)
             self.emit("ERROR", str(e))
         else:
-            self.emit("ECG_GOT_LIST", payload)
+            self.emit(event_out, payload)
+
+    def _get_list(self, data, meta):
+        data = []
+        for sha in self.data:
+            signal_data = {
+                "id": sha,
+                "timestamp": self.data[sha]["meta"]["timestamp"],
+                "is_annotated": len(self.data[sha]["annotation"]) > 0,
+            }
+            data.append(signal_data)
+        data = sorted(data, key=lambda val: val["timestamp"], reverse=True)
+        for d in data:
+            d["timestamp"] = d["timestamp"].strftime("%d.%m.%Y %H:%M:%S")
+        return dict(data=data, meta=meta)
+
+    def on_ECG_GET_LIST(self, data, meta):
+        self._safe_call(self._get_list, data, meta, "ECG_GET_LIST", "ECG_GOT_LIST")
+
+    def _get_item_data(self, data, meta):
+        sha = data.get("id")
+        if sha is None or sha not in self.data:
+            raise ValueError("Invalid sha {}".format(sha))
+        data["signal"] = self.data[sha]["signal"]
+        data["frequency"] = self.data[sha]["meta"]["fs"]
+        data["units"] = self.data[sha]["meta"]["units"]
+        data["signame"] = self.data[sha]["meta"]["signame"]
+        data["annotation"] = self.data[sha]["annotation"]
+        return dict(data=data, meta=meta)
 
     def on_ECG_GET_ITEM_DATA(self, data, meta):
-        print("ECG_GET_ITEM_DATA", data, meta)
-        try:
-            sha = data.get("id")
-            if sha is None or sha not in self.data:
-                raise ValueError("Invalid sha")
-            data["signal"] = self.data[sha]["signal"]
-            data["frequency"] = self.data[sha]["meta"]["fs"]
-            data["units"] = self.data[sha]["meta"]["units"]
-            data["signame"] = self.data[sha]["meta"]["signame"]
-            data["annotation"] = self.data[sha]["annotation"]
-            payload = dict(data=data, meta=meta)
-        except Exception as e:
-            print("ERROR ECG_GET_ITEM_DATA", data, meta)
-            self.emit("ERROR", str(e))
-        else:
-            self.emit("ECG_GOT_ITEM_DATA", payload)
+        self._safe_call(self._get_item_data, data, meta, "ECG_GET_ITEM_DATA", "ECG_GOT_ITEM_DATA")

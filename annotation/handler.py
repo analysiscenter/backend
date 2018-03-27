@@ -41,7 +41,10 @@ def _load_signal(path, retries=1, timeout=0.1):
             time.sleep(timeout)
         else:
             signal, meta = _convert_units(signal, meta, "mV")
-            return signal.tolist(), meta
+            signal = signal.tolist()
+            meta["units"] = meta["units"].tolist()
+            meta["signame"] = meta["signame"].tolist()
+            return signal, meta
     else:
         raise last_err
 
@@ -54,7 +57,7 @@ def _load_data(path, retries=1, timeout=0.1):
         "modification_time": os.path.getmtime(path),
         "signal": signal,
         "meta": meta,
-        "annotation": {},
+        "annotation": [],
     }
     return sha, data
 
@@ -76,8 +79,9 @@ class Handler(RegexMatchingEventHandler):
         existing_data = self.data.get(sha)
         if existing_data is None:
             self.data[sha] = data
-        elif existing_data["modification_time"] < data["modification_time"]:
-            # TODO: check if annotation exists
+        elif existing_data["modification_time"] > data["modification_time"]:
+            if len(existing_data["annotation"]) > 0:
+                data["annotation"] = existing_data["annotation"]
             self.data[sha] = data
             os.remove(os.path.join(self.watch_dir, existing_data["file_name"]))
         else:
