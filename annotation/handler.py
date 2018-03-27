@@ -87,14 +87,14 @@ class Handler(RegexMatchingEventHandler):
         print("File created:", event)
         self._update_data(event.src_path, retries=5)
         print(len(self.data), [v["file_name"] for k, v in self.data.items()])
-        # TODO: emit
+        self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_deleted(self, event):
         print("File deleted:", event)
         src = os.path.basename(event.src_path)
         self.data = {k: v for k, v in self.data.items() if v["file_name"] != src}
         print(len(self.data), [v["file_name"] for k, v in self.data.items()])
-        # TODO: emit
+        self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_moved(self, event):
         # TODO: redirection to on_created or on_deleted if needed
@@ -105,4 +105,4 @@ class Handler(RegexMatchingEventHandler):
             if v["file_name"] == src:
                 v["file_name"] = dst
         print(len(self.data), [v["file_name"] for k, v in self.data.items()])
-        # TODO: emit
+        self.namespace.on_ECG_GET_LIST({}, {})

@@ -28,7 +28,7 @@ class API_Namespace(Namespace):
             data = []
             for sha in self.data:
                 signal_data = {
-                    "sha": sha,
+                    "id": sha,
                     "timestamp": self.data[sha]["meta"]["timestamp"],
                     "is_annotated": len(self.data[sha]["annotation"]),
                 }
@@ -42,3 +42,21 @@ class API_Namespace(Namespace):
             self.emit("ERROR", str(e))
         else:
             self.emit("ECG_GOT_LIST", payload)
+
+    def on_ECG_GET_ITEM_DATA(self, data, meta):
+        print("ECG_GET_ITEM_DATA", data, meta)
+        try:
+            sha = data.get("id")
+            if sha is None or sha not in self.data:
+                raise ValueError("Invalid sha")
+            data["signal"] = self.data[sha]["signal"]
+            data["frequency"] = self.data[sha]["meta"]["fs"]
+            data["units"] = self.data[sha]["meta"]["units"]
+            data["signame"] = self.data[sha]["meta"]["signame"]
+            data["annotation"] = self.data[sha]["annotation"]
+            payload = dict(data=data, meta=meta)
+        except Exception as e:
+            print("ERROR ECG_GET_ITEM_DATA", data, meta)
+            self.emit("ERROR", str(e))
+        else:
+            self.emit("ECG_GOT_ITEM_DATA", payload)
