@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_socketio import SocketIO
 
-from demo.api import API_Namespace
+from annotation.api import API_Namespace
 
 
 app = Flask(__name__)
