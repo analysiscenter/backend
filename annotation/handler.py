@@ -5,7 +5,7 @@ import time
 from hashlib import sha256
 
 import numpy as np
-from watchdog.events import RegexMatchingEventHandler
+from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
 
 CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(1, os.path.join(CURRENT_PATH, "ecg"))
@@ -64,14 +64,15 @@ def _load_data(path, retries=1, timeout=0.1):
 
 class Handler(RegexMatchingEventHandler):
     def __init__(self, namespace, watch_dir, annotation_path, *args, **kwargs):
-        pattern = "^.+\.xml$"
-        super().__init__([pattern], *args, **kwargs)
+        self.pattern = "^.+\.xml$"
+        super().__init__([self.pattern], *args, **kwargs)
         self.namespace = namespace
         self.watch_dir = watch_dir
         self.annotation_path = annotation_path
         self.data = {}
         print("Initial loading")
-        for path in (os.path.join(watch_dir, f) for f in os.listdir(watch_dir) if re.match(pattern, f)):
+        path_gen = (os.path.join(watch_dir, f) for f in os.listdir(watch_dir) if re.match(self.pattern, f) is not None)
+        for path in path_gen:
             self._update_data(path)
         print(len(self.data), [v["file_name"] for k, v in self.data.items()])
 
@@ -138,6 +139,7 @@ class Handler(RegexMatchingEventHandler):
     def on_deleted(self, event):
         print("File deleted:", event)
         src = os.path.basename(event.src_path)
+        need_dump = False
         data = {}
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] != src:
@@ -151,10 +153,16 @@ class Handler(RegexMatchingEventHandler):
         self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_moved(self, event):
-        # TODO: redirection to on_created or on_deleted if needed
-        print("File renamed:", event)
         src = os.path.basename(event.src_path)
+        src_match = re.match(self.pattern, src) is not None
         dst = os.path.basename(event.dest_path)
+        dst_match = re.match(self.pattern, dst) is not None
+        if not src_match and dst_match:
+            return self.on_created(FileSystemEvent(event.dest_path))
+        elif src_match and not dst_match:
+            return self.on_deleted(FileSystemEvent(event.src_path))
+        print("File renamed:", event)
+        need_dump = False
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] == src:
                 signal_data["file_name"] = dst
