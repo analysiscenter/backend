@@ -1,3 +1,5 @@
+import traceback
+
 from flask import request
 from flask_socketio import Namespace
 from watchdog.observers import Observer
@@ -22,15 +24,16 @@ class API_Namespace(Namespace):
     def on_disconnect(self):
         print("User disconnected", request, request.sid)
 
-    def _safe_call(self, method, data, meta, event_in, event_out):
+    def _safe_call(self, method, data, meta, event_in, event_out=None):
         print(event_in, data, meta)
         try:
             payload = method(data, meta)
-        except Exception as e:
+            if event_out is not None:
+                self.emit(event_out, payload)
+        except Exception as error:
             print("ERROR " + event_in, data, meta)
-            self.emit("ERROR", str(e))
-        else:
-            self.emit(event_out, payload)
+            traceback.print_exc()
+            self.emit("ERROR", str(error))
 
     def _get_list(self, data, meta):
         data = []
@@ -62,3 +65,15 @@ class API_Namespace(Namespace):
 
     def on_ECG_GET_ITEM_DATA(self, data, meta):
         self._safe_call(self._get_item_data, data, meta, "ECG_GET_ITEM_DATA", "ECG_GOT_ITEM_DATA")
+
+    def _set_annotation(self, data, meta):
+        sha = data.get("id")
+        if sha is None or sha not in self.data:
+            raise ValueError("Invalid sha {}".format(sha))
+        annotation = data.get("annotation")
+        if annotation is None:
+            raise ValueError("Empty annotation")
+        self.data[sha]["annotation"] = annotation
+
+    def on_ECG_SET_ANNOTATION(self, data, meta):
+        self._safe_call(self._set_annotation, data, meta, "ECG_SET_ANNOTATION")
