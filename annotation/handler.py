@@ -52,22 +52,23 @@ def _load_signal(path, retries=1, timeout=0.1):
 def _load_data(path, retries=1, timeout=0.1):
     signal, meta = _load_signal(path, retries, timeout)
     sha = sha256_checksum(path)
-    data = {
+    signal_data = {
         "file_name": os.path.basename(path),
         "modification_time": os.path.getmtime(path),
         "signal": signal,
         "meta": meta,
         "annotation": [],
     }
-    return sha, data
+    return sha, signal_data
 
 
 class Handler(RegexMatchingEventHandler):
-    def __init__(self, namespace, watch_dir, *args, **kwargs):
+    def __init__(self, namespace, watch_dir, annotation_path, *args, **kwargs):
         pattern = "^.+\.xml$"
         super().__init__([pattern], *args, **kwargs)
         self.namespace = namespace
         self.watch_dir = watch_dir
+        self.annotation_path = annotation_path
         self.data = {}
         print("Initial loading")
         for path in (os.path.join(watch_dir, f) for f in os.listdir(watch_dir) if re.match(pattern, f)):
@@ -75,29 +76,78 @@ class Handler(RegexMatchingEventHandler):
         print(len(self.data), [v["file_name"] for k, v in self.data.items()])
 
     def _update_data(self, path, retries=1, timeout=0.1):
-        sha, data = _load_data(path, retries, timeout)
+        sha, signal_data = _load_data(path, retries, timeout)
         existing_data = self.data.get(sha)
         if existing_data is None:
-            self.data[sha] = data
-        elif existing_data["modification_time"] > data["modification_time"]:
+            self.data[sha] = signal_data
+        elif existing_data["modification_time"] > signal_data["modification_time"]:
             if len(existing_data["annotation"]) > 0:
-                data["annotation"] = existing_data["annotation"]
-            self.data[sha] = data
+                signal_data["annotation"] = existing_data["annotation"]
+            self.data[sha] = signal_data
             os.remove(os.path.join(self.watch_dir, existing_data["file_name"]))
         else:
             os.remove(path)
 
+    def _dump_annotation(self):
+        print("Dump call")
+        for sha, signal_data in self.data.items():
+            if len(signal_data["annotation"]) > 0:
+                print(sha[:5], signal_data["annotation"])
+
+    def _get_list(self, data, meta):
+        data = []
+        for sha in self.data:
+            signal_data = {
+                "id": sha,
+                "timestamp": self.data[sha]["meta"]["timestamp"],
+                "is_annotated": len(self.data[sha]["annotation"]) > 0,
+            }
+            data.append(signal_data)
+        data = sorted(data, key=lambda val: val["timestamp"], reverse=True)
+        for d in data:
+            d["timestamp"] = d["timestamp"].strftime("%d.%m.%Y %H:%M:%S")
+        return dict(data=data, meta=meta)
+
+    def _get_item_data(self, data, meta):
+        sha = data.get("id")
+        if sha is None or sha not in self.data:
+            raise ValueError("Invalid sha {}".format(sha))
+        data["signal"] = self.data[sha]["signal"]
+        data["frequency"] = self.data[sha]["meta"]["fs"]
+        data["units"] = self.data[sha]["meta"]["units"]
+        data["signame"] = self.data[sha]["meta"]["signame"]
+        data["annotation"] = self.data[sha]["annotation"]
+        return dict(data=data, meta=meta)
+
+    def _set_annotation(self, data, meta):
+        sha = data.get("id")
+        if sha is None or sha not in self.data:
+            raise ValueError("Invalid sha {}".format(sha))
+        annotation = data.get("annotation")
+        if annotation is None:
+            raise ValueError("Empty annotation")
+        self.data[sha]["annotation"] = annotation
+        self._dump_annotation()
+
     def on_created(self, event):
         print("File created:", event)
         self._update_data(event.src_path, retries=5)
-        print(len(self.data), [v["file_name"] for k, v in self.data.items()])
+        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
         self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_deleted(self, event):
         print("File deleted:", event)
         src = os.path.basename(event.src_path)
-        self.data = {k: v for k, v in self.data.items() if v["file_name"] != src}
-        print(len(self.data), [v["file_name"] for k, v in self.data.items()])
+        data = {}
+        for sha, signal_data in self.data.items():
+            if signal_data["file_name"] != src:
+                data[sha] = signal_data
+            else:
+                need_dump = len(signal_data["annotation"]) > 0
+        self.data = data
+        if need_dump:
+            self._dump_annotation()
+        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
         self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_moved(self, event):
@@ -105,8 +155,11 @@ class Handler(RegexMatchingEventHandler):
         print("File renamed:", event)
         src = os.path.basename(event.src_path)
         dst = os.path.basename(event.dest_path)
-        for k, v in self.data.items():
-            if v["file_name"] == src:
-                v["file_name"] = dst
-        print(len(self.data), [v["file_name"] for k, v in self.data.items()])
+        for sha, signal_data in self.data.items():
+            if signal_data["file_name"] == src:
+                signal_data["file_name"] = dst
+                need_dump = len(signal_data["annotation"]) > 0
+        if need_dump:
+            self._dump_annotation()
+        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
         self.namespace.on_ECG_GET_LIST({}, {})
