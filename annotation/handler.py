@@ -86,6 +86,7 @@ class Handler(RegexMatchingEventHandler):
         elif existing_data["modification_time"] > signal_data["modification_time"]:
             if len(existing_data["annotation"]) > 0:
                 signal_data["annotation"] = existing_data["annotation"]
+                self._dump_annotation()
             self.data[sha] = signal_data
             os.remove(os.path.join(self.watch_dir, existing_data["file_name"]))
         else:

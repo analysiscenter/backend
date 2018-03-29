@@ -18,6 +18,7 @@ def create_namespace():
     parser = argparse.ArgumentParser(description="A backend for an ECG/CT demo and an ECG annotation tool.")
     subparsers = parser.add_subparsers(dest="launch_mode")
     subparsers.required = True
+
     parser_demo = subparsers.add_parser("demo", help="Launch an ECG/CT demo")
     parser_demo.set_defaults(func=create_demo_namespace)
 
