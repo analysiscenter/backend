@@ -8,10 +8,8 @@ from .handler import Handler
 
 
 class API_Namespace(Namespace):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, watch_dir, annotation_path, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        watch_dir = "D:\\Projects\\GitHub\\backend\\annotation\\watch\\"
-        annotation_path = ""
         self.handler = Handler(self, watch_dir, annotation_path, ignore_directories=True)
         observer = Observer()
         observer.schedule(self.handler, watch_dir)

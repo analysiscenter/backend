@@ -71,10 +71,12 @@ class Handler(RegexMatchingEventHandler):
         self.annotation_path = annotation_path
         self.data = {}
         print("Initial loading")
-        path_gen = (os.path.join(watch_dir, f) for f in os.listdir(watch_dir) if re.match(self.pattern, f) is not None)
+        path_gen = (os.path.join(self.watch_dir, f) for f in os.listdir(self.watch_dir)
+                    if re.match(self.pattern, f) is not None)
         for path in path_gen:
             self._update_data(path)
-        print(len(self.data), [v["file_name"] for k, v in self.data.items()])
+        # TODO: load annotation
+        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
 
     def _update_data(self, path, retries=1, timeout=0.1):
         sha, signal_data = _load_data(path, retries, timeout)
@@ -90,6 +92,7 @@ class Handler(RegexMatchingEventHandler):
             os.remove(path)
 
     def _dump_annotation(self):
+        # TODO: dump annotation
         print("Dump call")
         for sha, signal_data in self.data.items():
             if len(signal_data["annotation"]) > 0:
@@ -131,14 +134,15 @@ class Handler(RegexMatchingEventHandler):
         self._dump_annotation()
 
     def on_created(self, event):
-        print("File created:", event)
+        src = os.path.basename(event.src_path)
+        print("File created: {}".format(src))
         self._update_data(event.src_path, retries=5)
         print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
         self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_deleted(self, event):
-        print("File deleted:", event)
         src = os.path.basename(event.src_path)
+        print("File deleted: {}".format(src))
         need_dump = False
         data = {}
         for sha, signal_data in self.data.items():
@@ -161,7 +165,7 @@ class Handler(RegexMatchingEventHandler):
             return self.on_created(FileSystemEvent(event.dest_path))
         elif src_match and not dst_match:
             return self.on_deleted(FileSystemEvent(event.src_path))
-        print("File renamed:", event)
+        print("File renamed: {} -> {}".format(src, dst))
         need_dump = False
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] == src:
