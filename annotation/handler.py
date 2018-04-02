@@ -74,7 +74,7 @@ class Handler(RegexMatchingEventHandler):
         self.data = {}
         print("Initial loading")
         with open(annotation_list_path, encoding="utf8") as json_data:
-            self.annotations_dict = json.load(json_data, object_pairs_hook=OrderedDict)
+            self.annotation_dict = json.load(json_data, object_pairs_hook=OrderedDict)
         path_gen = (os.path.join(self.watch_dir, f) for f in os.listdir(self.watch_dir)
                     if re.match(self.pattern, f) is not None)
         for path in path_gen:
@@ -104,7 +104,7 @@ class Handler(RegexMatchingEventHandler):
                 print(sha[:5], signal_data["annotation"])
 
     def _get_annotation_list(self, data, meta):
-        data = [{"id": group, "annotations": annotations} for group, annotations in self.annotations_dict]
+        data = [{"id": group, "annotations": annotations} for group, annotations in self.annotation_dict.items()]
         return dict(data=data, meta=meta)
 
     def _get_ecg_list(self, data, meta):
