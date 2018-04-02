@@ -3,6 +3,7 @@ import sys
 import re
 import time
 import json
+import random
 from hashlib import sha256
 from collections import OrderedDict
 
@@ -75,6 +76,10 @@ class Handler(RegexMatchingEventHandler):
         print("Initial loading")
         with open(annotation_list_path, encoding="utf8") as json_data:
             self.annotation_dict = json.load(json_data, object_pairs_hook=OrderedDict)
+        self.annotation_count_dict = OrderedDict()
+        for group, annotations in self.annotation_dict.items():
+            for annotation in annotations:
+                self.annotation_count_dict[group + "@" + annotation] = 0
         path_gen = (os.path.join(self.watch_dir, f) for f in os.listdir(self.watch_dir)
                     if re.match(self.pattern, f) is not None)
         for path in path_gen:
@@ -119,6 +124,13 @@ class Handler(RegexMatchingEventHandler):
         data = sorted(data, key=lambda val: val["timestamp"], reverse=True)
         for d in data:
             d["timestamp"] = d["timestamp"].strftime("%d.%m.%Y %H:%M:%S")
+        return dict(data=data, meta=meta)
+
+    def _get_common_annotation_list(self, data, meta):
+        N_TOP_DEFAULT = 5
+        n_top = data.get("n_top", N_TOP_DEFAULT)
+        annotations = [random.choise(list(self.annotation_count_dict.keys())) for _ in range(n_top)]
+        data["annotations"] = annotations
         return dict(data=data, meta=meta)
 
     def _get_item_data(self, data, meta):
