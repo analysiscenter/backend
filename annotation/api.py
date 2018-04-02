@@ -8,9 +8,10 @@ from .handler import Handler
 
 
 class API_Namespace(Namespace):
-    def __init__(self, watch_dir, annotation_path, *args, **kwargs):
+    def __init__(self, watch_dir, submitted_annotation_path, annotation_list_path, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.handler = Handler(self, watch_dir, annotation_path, ignore_directories=True)
+        self.handler = Handler(self, watch_dir, submitted_annotation_path, annotation_list_path,
+                               ignore_directories=True)
         observer = Observer()
         observer.schedule(self.handler, watch_dir)
         observer.start()
@@ -33,8 +34,12 @@ class API_Namespace(Namespace):
             traceback.print_exc()
             self.emit("ERROR", str(error))
 
+    def on_ECG_GET_ANNOTATION_LIST(self, data, meta):
+        self._safe_call(self.handler._get_annotation_list, data, meta, "ECG_GET_ANNOTATION_LIST",
+                        "ECG_GOT_ANNOTATION_LIST")
+
     def on_ECG_GET_LIST(self, data, meta):
-        self._safe_call(self.handler._get_list, data, meta, "ECG_GET_LIST", "ECG_GOT_LIST")
+        self._safe_call(self.handler._get_ecg_list, data, meta, "ECG_GET_LIST", "ECG_GOT_LIST")
 
     def on_ECG_GET_ITEM_DATA(self, data, meta):
         self._safe_call(self.handler._get_item_data, data, meta, "ECG_GET_ITEM_DATA", "ECG_GOT_ITEM_DATA")

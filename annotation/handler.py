@@ -2,7 +2,9 @@ import os
 import sys
 import re
 import time
+import json
 from hashlib import sha256
+from collections import OrderedDict
 
 import numpy as np
 from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
@@ -63,14 +65,16 @@ def _load_data(path, retries=1, timeout=0.1):
 
 
 class Handler(RegexMatchingEventHandler):
-    def __init__(self, namespace, watch_dir, annotation_path, *args, **kwargs):
+    def __init__(self, namespace, watch_dir, submitted_annotation_path, annotation_list_path, *args, **kwargs):
         self.pattern = "^.+\.xml$"
         super().__init__([self.pattern], *args, **kwargs)
         self.namespace = namespace
         self.watch_dir = watch_dir
-        self.annotation_path = annotation_path
+        self.submitted_annotation_path = submitted_annotation_path
         self.data = {}
         print("Initial loading")
+        with open(annotation_list_path, encoding="utf8") as json_data:
+            self.annotations_dict = json.load(json_data, object_pairs_hook=OrderedDict)
         path_gen = (os.path.join(self.watch_dir, f) for f in os.listdir(self.watch_dir)
                     if re.match(self.pattern, f) is not None)
         for path in path_gen:
@@ -99,7 +103,11 @@ class Handler(RegexMatchingEventHandler):
             if len(signal_data["annotation"]) > 0:
                 print(sha[:5], signal_data["annotation"])
 
-    def _get_list(self, data, meta):
+    def _get_annotation_list(self, data, meta):
+        data = [{"id": group, "annotations": annotations} for group, annotations in self.annotations_dict]
+        return dict(data=data, meta=meta)
+
+    def _get_ecg_list(self, data, meta):
         data = []
         for sha in self.data:
             signal_data = {

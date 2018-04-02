@@ -11,7 +11,7 @@ def create_demo_namespace(args):
 
 def create_annotation_namespace(args):
     from annotation.api import API_Namespace
-    return API_Namespace(args.watch_dir, args.annotation_path, "/api")
+    return API_Namespace(args.watch_dir, args.submitted_annotation_path, args.annotation_list_path, "/api")
 
 
 def create_namespace():
@@ -24,7 +24,9 @@ def create_namespace():
 
     parser_annotation = subparsers.add_parser("annotation", help="Launch an ECG annotation tool")
     parser_annotation.add_argument("watch_dir", help="A path to a directory to watch for new ECG files")
-    parser_annotation.add_argument("annotation_path", help="A path to a file with an ECG annotation")
+    parser_annotation.add_argument("submitted_annotation_path", help="A path to a file with submitted ECG annotations")
+    parser_annotation.add_argument("annotation_list_path",
+                                   help="A path to a file with a list of possible ECG annotations")
     parser_annotation.set_defaults(func=create_annotation_namespace)
 
     args = parser.parse_args()
