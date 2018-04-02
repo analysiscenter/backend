@@ -78,13 +78,16 @@ class Handler(RegexMatchingEventHandler):
             self.annotation_dict = json.load(json_data, object_pairs_hook=OrderedDict)
         self.annotation_count_dict = OrderedDict()
         for group, annotations in self.annotation_dict.items():
-            for annotation in annotations:
-                self.annotation_count_dict[group + "@" + annotation] = 0
+            if not annotations:
+                self.annotation_count_dict[group] = 0
+            else:
+                for annotation in annotations:
+                    self.annotation_count_dict[group + "/" + annotation] = 0
         path_gen = (os.path.join(self.watch_dir, f) for f in os.listdir(self.watch_dir)
                     if re.match(self.pattern, f) is not None)
         for path in path_gen:
             self._update_data(path)
-        # TODO: load annotation
+        # TODO: load annotation, update data and counts
         print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
 
     def _update_data(self, path, retries=1, timeout=0.1):
@@ -129,7 +132,8 @@ class Handler(RegexMatchingEventHandler):
     def _get_common_annotation_list(self, data, meta):
         N_TOP_DEFAULT = 5
         n_top = data.get("n_top", N_TOP_DEFAULT)
-        annotations = [random.choise(list(self.annotation_count_dict.keys())) for _ in range(n_top)]
+        d = {annotation: count for annotation, count in self.annotation_count_dict.items() if count > 0}
+        annotations = sorted(d, key=lambda x: (-d[x], x))[:n_top]
         data["annotations"] = annotations
         return dict(data=data, meta=meta)
 
@@ -151,8 +155,13 @@ class Handler(RegexMatchingEventHandler):
         annotation = data.get("annotation")
         if annotation is None:
             raise ValueError("Empty annotation")
+        for old_annotation in self.data[sha]["annotation"]:
+            self.annotation_count_dict[old_annotation] -= 1
         self.data[sha]["annotation"] = annotation
+        for new_annotation in self.data[sha]["annotation"]:
+            self.annotation_count_dict[new_annotation] += 1
         self._dump_annotation()
+        self.namespace.on_ECG_GET_COMMON_ANNOTATION_LIST({}, {})
 
     def on_created(self, event):
         src = os.path.basename(event.src_path)
