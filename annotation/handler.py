@@ -130,10 +130,10 @@ class Handler(RegexMatchingEventHandler):
         return dict(data=data, meta=meta)
 
     def _get_common_annotation_list(self, data, meta):
-        N_TOP_DEFAULT = 5
-        n_top = data.get("n_top", N_TOP_DEFAULT)
-        d = {annotation: count for annotation, count in self.annotation_count_dict.items() if count > 0}
-        annotations = sorted(d, key=lambda x: (-d[x], x))[:n_top]
+        N_TOP = 5
+        positive_count = {annotation: count for annotation, count in self.annotation_count_dict.items()
+                          if count > 0 and "Другое" not in annotation}
+        annotations = sorted(positive_count, key=lambda x: (-positive_count[x], x))[:N_TOP]
         data["annotations"] = annotations
         return dict(data=data, meta=meta)
 
