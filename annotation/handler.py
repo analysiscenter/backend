@@ -95,8 +95,10 @@ class Handler(RegexMatchingEventHandler):
         positive_count = {annotation: count for annotation, count in self.annotation_count_dict.items()
                           if count > 0 and not any(word in annotation for word in STOPWORDS)}
         annotations = sorted(positive_count, key=lambda x: (-positive_count[x], x))
-        annotations = (annotations + DEFAULTS)[:N_TOP]
-        data["annotations"] = annotations
+        for default in sorted(DEFAULTS):
+            if default not in annotations:
+                annotations.append(default)
+        data["annotations"] = annotations[:N_TOP]
         return dict(data=data, meta=meta)
 
     def _get_ecg_list(self, data, meta):
