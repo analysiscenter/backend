@@ -1,68 +1,11 @@
 import os
-import sys
 import re
-import time
 import json
-import random
-from hashlib import sha256
 from collections import OrderedDict
 
-import numpy as np
 from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
 
-CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(1, os.path.join(CURRENT_PATH, "ecg"))
-from cardio.core.ecg_batch_tools import load_xml_schiller
-from cardio.core.utils import get_multiplier
-
-
-def sha256_checksum(path, block_size=2**16):
-    sha = sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(block_size), b""):
-            sha.update(block)
-    return sha.hexdigest()
-
-
-def _convert_units(signal, meta, units):
-    old_units = meta["units"]
-    new_units = [units] * len(old_units)
-    multiplier = [get_multiplier(old, new) for old, new in zip(old_units, new_units)]
-    multiplier = np.array(multiplier).reshape(-1, 1)
-    signal *= multiplier
-    meta["units"] = np.asarray(new_units)
-    return signal, meta
-
-
-def _load_signal(path, retries=1, timeout=0.1):
-    last_err = None
-    for _ in range(retries):
-        try:
-            signal, meta = load_xml_schiller(path, ["signal", "meta"])
-        except Exception as err:
-            last_err = err
-            time.sleep(timeout)
-        else:
-            signal, meta = _convert_units(signal, meta, "mV")
-            signal = signal.tolist()
-            meta["units"] = meta["units"].tolist()
-            meta["signame"] = meta["signame"].tolist()
-            return signal, meta
-    else:
-        raise last_err
-
-
-def _load_data(path, retries=1, timeout=0.1):
-    signal, meta = _load_signal(path, retries, timeout)
-    sha = sha256_checksum(path)
-    signal_data = {
-        "file_name": os.path.basename(path),
-        "modification_time": os.path.getmtime(path),
-        "signal": signal,
-        "meta": meta,
-        "annotation": [],
-    }
-    return sha, signal_data
+from .loader import load_data
 
 
 class Handler(RegexMatchingEventHandler):
@@ -91,7 +34,7 @@ class Handler(RegexMatchingEventHandler):
         print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
 
     def _update_data(self, path, retries=1, timeout=0.1):
-        sha, signal_data = _load_data(path, retries, timeout)
+        sha, signal_data = load_data(path, retries, timeout)
         existing_data = self.data.get(sha)
         if existing_data is None:
             self.data[sha] = signal_data
