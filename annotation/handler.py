@@ -44,8 +44,16 @@ class Handler(RegexMatchingEventHandler):
             self._update_data(path)
 
     def _load_submitted_annotation(self):
-        # TODO: load annotation, update data and counts
-        pass
+        if not os.path.isfile(self.submitted_annotation_path):
+            return
+        df = pd.read_feather(self.submitted_annotation_path).set_index("index")
+        counts = df.sum()
+        for annotation in self.annotation_count_dict:
+            self.annotation_count_dict[annotation] = counts.get(annotation, 0)
+        for sha, signal_data in self.data.items():
+            if signal_data["file_name"] in df.index:
+                annotation = df.loc[signal_data["file_name"]]
+                signal_data["annotation"] = annotation[annotation != 0].index.tolist()
 
     def _update_data(self, path, retries=1, timeout=0.1):
         sha, signal_data = load_data(path, retries, timeout)
