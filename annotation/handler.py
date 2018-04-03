@@ -3,6 +3,8 @@ import re
 import json
 from collections import OrderedDict
 
+import numpy as np
+import pandas as pd
 from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
 
 from .loader import load_data
@@ -47,12 +49,20 @@ class Handler(RegexMatchingEventHandler):
         else:
             os.remove(path)
 
+    def _encode_annotation(self, annotation):
+        return np.isin(list(self.annotation_count_dict.keys()), annotation).astype(int)
+
     def _dump_annotation(self):
-        # TODO: dump annotation
         print("Dump call")
+        annotations = []
         for sha, signal_data in self.data.items():
             if len(signal_data["annotation"]) > 0:
-                print(sha[:5], signal_data["annotation"])
+                annotations.append((signal_data["file_name"], self._encode_annotation(signal_data["annotation"])))
+        if annotations:
+            index, annotations = zip(*annotations)
+            annotations = np.array(annotations)
+            df = pd.DataFrame(annotations, index=index, columns=list(self.annotation_count_dict.keys())).reset_index()
+            df.to_feather(self.submitted_annotation_path)
 
     def _get_annotation_list(self, data, meta):
         data = [{"id": group, "annotations": annotations} for group, annotations in self.annotation_dict.items()]
