@@ -17,9 +17,17 @@ class Handler(RegexMatchingEventHandler):
         self.namespace = namespace
         self.watch_dir = watch_dir
         self.submitted_annotation_path = submitted_annotation_path
-        self.data = {}
+        self.annotation_list_path = annotation_list_path
+        self.data = OrderedDict()
+
         print("Initial loading")
-        with open(annotation_list_path, encoding="utf8") as json_data:
+        self._load_annotation_list()
+        self._load_data()
+        self._load_submitted_annotation()
+        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
+
+    def _load_annotation_list(self):
+        with open(self.annotation_list_path, encoding="utf-8") as json_data:
             self.annotation_dict = json.load(json_data, object_pairs_hook=OrderedDict)
         self.annotation_count_dict = OrderedDict()
         for group, annotations in self.annotation_dict.items():
@@ -28,12 +36,16 @@ class Handler(RegexMatchingEventHandler):
             else:
                 for annotation in annotations:
                     self.annotation_count_dict[group + "/" + annotation] = 0
-        path_gen = (os.path.join(self.watch_dir, f) for f in os.listdir(self.watch_dir)
+
+    def _load_data(self):
+        path_gen = (os.path.join(self.watch_dir, f) for f in sorted(os.listdir(self.watch_dir))
                     if re.match(self.pattern, f) is not None)
         for path in path_gen:
             self._update_data(path)
+
+    def _load_submitted_annotation(self):
         # TODO: load annotation, update data and counts
-        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
+        pass
 
     def _update_data(self, path, retries=1, timeout=0.1):
         sha, signal_data = load_data(path, retries, timeout)
@@ -41,7 +53,7 @@ class Handler(RegexMatchingEventHandler):
         if existing_data is None:
             self.data[sha] = signal_data
         elif existing_data["modification_time"] > signal_data["modification_time"]:
-            if len(existing_data["annotation"]) > 0:
+            if existing_data["annotation"]:
                 signal_data["annotation"] = existing_data["annotation"]
                 self._dump_annotation()
             self.data[sha] = signal_data
@@ -56,7 +68,7 @@ class Handler(RegexMatchingEventHandler):
         print("Dump call")
         annotations = []
         for sha, signal_data in self.data.items():
-            if len(signal_data["annotation"]) > 0:
+            if signal_data["annotation"]:
                 annotations.append((signal_data["file_name"], self._encode_annotation(signal_data["annotation"])))
         if annotations:
             index, annotations = zip(*annotations)
@@ -68,37 +80,39 @@ class Handler(RegexMatchingEventHandler):
         data = [{"id": group, "annotations": annotations} for group, annotations in self.annotation_dict.items()]
         return dict(data=data, meta=meta)
 
-    def _get_ecg_list(self, data, meta):
-        data = []
-        for sha in self.data:
-            signal_data = {
-                "id": sha,
-                "timestamp": self.data[sha]["meta"]["timestamp"],
-                "is_annotated": len(self.data[sha]["annotation"]) > 0,
-            }
-            data.append(signal_data)
-        data = sorted(data, key=lambda val: val["timestamp"], reverse=True)
-        for d in data:
-            d["timestamp"] = d["timestamp"].strftime("%d.%m.%Y %H:%M:%S")
-        return dict(data=data, meta=meta)
-
     def _get_common_annotation_list(self, data, meta):
         N_TOP = 5
+        STOPWORDS = ["Другое"]
         positive_count = {annotation: count for annotation, count in self.annotation_count_dict.items()
-                          if count > 0 and "Другое" not in annotation}
+                          if count > 0 and not any(word in annotation for word in STOPWORDS)}
         annotations = sorted(positive_count, key=lambda x: (-positive_count[x], x))[:N_TOP]
         data["annotations"] = annotations
         return dict(data=data, meta=meta)
+
+    def _get_ecg_list(self, data, meta):
+        ecg_list = []
+        for sha, signal_data in self.data.items():
+            ecg_data = {
+                "id": sha,
+                "timestamp": signal_data["meta"]["timestamp"],
+                "is_annotated": bool(signal_data["annotation"]),
+            }
+            ecg_list.append(ecg_data)
+        ecg_list = sorted(ecg_list, key=lambda val: val["timestamp"], reverse=True)
+        for ecg_data in ecg_list:
+            ecg_data["timestamp"] = ecg_data["timestamp"].strftime("%d.%m.%Y %H:%M:%S")
+        return dict(data=ecg_list, meta=meta)
 
     def _get_item_data(self, data, meta):
         sha = data.get("id")
         if sha is None or sha not in self.data:
             raise ValueError("Invalid sha {}".format(sha))
-        data["signal"] = self.data[sha]["signal"]
-        data["frequency"] = self.data[sha]["meta"]["fs"]
-        data["units"] = self.data[sha]["meta"]["units"]
-        data["signame"] = self.data[sha]["meta"]["signame"]
-        data["annotation"] = self.data[sha]["annotation"]
+        signal_data = self.data[sha]
+        data["signal"] = signal_data["signal"]
+        data["frequency"] = signal_data["meta"]["fs"]
+        data["units"] = signal_data["meta"]["units"]
+        data["signame"] = signal_data["meta"]["signame"]
+        data["annotation"] = signal_data["annotation"]
         return dict(data=data, meta=meta)
 
     def _set_annotation(self, data, meta):
@@ -108,6 +122,9 @@ class Handler(RegexMatchingEventHandler):
         annotation = data.get("annotation")
         if annotation is None:
             raise ValueError("Empty annotation")
+        unknown_annotation = [ann for ann in annotation if ann not in self.annotation_count_dict]
+        if unknown_annotation:
+            raise ValueError("Unknown annotation: {}".format(", ".join(unknown_annotation)))
         for old_annotation in self.data[sha]["annotation"]:
             self.annotation_count_dict[old_annotation] -= 1
         self.data[sha]["annotation"] = annotation
@@ -127,12 +144,12 @@ class Handler(RegexMatchingEventHandler):
         src = os.path.basename(event.src_path)
         print("File deleted: {}".format(src))
         need_dump = False
-        data = {}
+        data = OrderedDict()
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] != src:
                 data[sha] = signal_data
             else:
-                need_dump = len(signal_data["annotation"]) > 0
+                need_dump = bool(signal_data["annotation"])
         self.data = data
         if need_dump:
             self._dump_annotation()
@@ -153,7 +170,7 @@ class Handler(RegexMatchingEventHandler):
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] == src:
                 signal_data["file_name"] = dst
-                need_dump = len(signal_data["annotation"]) > 0
+                need_dump = bool(signal_data["annotation"])
         if need_dump:
             self._dump_annotation()
         print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
