@@ -91,9 +91,11 @@ class Handler(RegexMatchingEventHandler):
     def _get_common_annotation_list(self, data, meta):
         N_TOP = 5
         STOPWORDS = ["Другое"]
+        DEFAULTS = ["Нормальный ритм"]
         positive_count = {annotation: count for annotation, count in self.annotation_count_dict.items()
                           if count > 0 and not any(word in annotation for word in STOPWORDS)}
-        annotations = sorted(positive_count, key=lambda x: (-positive_count[x], x))[:N_TOP]
+        annotations = sorted(positive_count, key=lambda x: (-positive_count[x], x))
+        annotations = (annotations + DEFAULTS)[:N_TOP]
         data["annotations"] = annotations
         return dict(data=data, meta=meta)
 
