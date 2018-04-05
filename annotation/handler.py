@@ -98,7 +98,9 @@ class Handler(RegexMatchingEventHandler):
         for default in sorted(DEFAULTS):
             if default not in annotations:
                 annotations.append(default)
-        data["annotations"] = annotations[:N_TOP]
+        annotations = annotations[:N_TOP]
+        print("Common annotations:", annotations)
+        data["annotations"] = annotations
         return dict(data=data, meta=meta)
 
     def _get_ecg_list(self, data, meta):
@@ -160,8 +162,10 @@ class Handler(RegexMatchingEventHandler):
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] != src:
                 data[sha] = signal_data
-            else:
-                need_dump = bool(signal_data["annotation"])
+            elif signal_data["annotation"]:
+                for annotation in signal_data["annotation"]:
+                    self.annotation_count_dict[annotation] -= 1
+                need_dump = True
         self.data = data
         if need_dump:
             self._dump_annotation()
