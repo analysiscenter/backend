@@ -169,6 +169,7 @@ class Handler(RegexMatchingEventHandler):
         self.data = data
         if need_dump:
             self._dump_annotation()
+            self.namespace.on_ECG_GET_COMMON_ANNOTATION_LIST({}, {})
         print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
         self.namespace.on_ECG_GET_LIST({}, {})
 
