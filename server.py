@@ -1,3 +1,7 @@
+import sys
+import json
+import logging
+import logging.config
 import argparse
 
 from flask import Flask
@@ -14,7 +18,7 @@ def create_annotation_namespace(args):
     return API_Namespace(args.watch_dir, args.submitted_annotation_path, args.annotation_list_path, "/api")
 
 
-def create_namespace():
+def parse_args():
     parser = argparse.ArgumentParser(description="A backend for an ECG/CT demo and an ECG annotation tool.")
     subparsers = parser.add_subparsers(dest="launch_mode")
     subparsers.required = True
@@ -24,22 +28,39 @@ def create_namespace():
 
     parser_annotation = subparsers.add_parser("annotation", help="Launch an ECG annotation tool")
     parser_annotation.add_argument("watch_dir", help="A path to a directory to watch for new ECG files")
-    parser_annotation.add_argument("submitted_annotation_path", help="A path to a file with submitted ECG annotations")
+    parser_annotation.add_argument("submitted_annotation_path",
+                                   help="A path to a feather file with submitted ECG annotations")
     parser_annotation.add_argument("annotation_list_path",
-                                   help="A path to a file with a list of possible ECG annotations")
+                                   help="A path to a json file with a list of possible ECG annotations")
     parser_annotation.set_defaults(func=create_annotation_namespace)
 
     args = parser.parse_args()
+    return args
+
+
+def create_logger(args):
+    with open("logger_config.json", encoding="utf-8") as json_data:
+        logger_config = json.load(json_data)
+    logging.config.dictConfig(logger_config)
+    logger = logging.getLogger("server")
+    return logger
+
+
+def create_namespace(args):
     namespace = args.func(args)
     return namespace
 
 
 def main():
-    namespace = create_namespace()
+    args = parse_args()
+    logger = create_logger(args)
+    namespace = create_namespace(args)
+
     app = Flask(__name__)
     socketio = SocketIO(app)
     socketio.on_namespace(namespace)
-    print("Run app")
+
+    logger.info("Run app")
     socketio.run(app, port=9090)
 
 
