@@ -1,5 +1,4 @@
 import logging
-import traceback
 
 from flask import request
 from flask_socketio import Namespace

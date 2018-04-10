@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import logging
 from collections import OrderedDict
 
 import numpy as np
@@ -18,13 +19,19 @@ class Handler(RegexMatchingEventHandler):
         self.watch_dir = watch_dir
         self.submitted_annotation_path = submitted_annotation_path
         self.annotation_list_path = annotation_list_path
+        self.logger = logging.getLogger("server." + __name__)
         self.data = OrderedDict()
 
-        print("Initial loading")
+        self.logger.info("Initial loading started")
         self._load_annotation_list()
         self._load_data()
         self._load_submitted_annotation()
-        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
+        self.logger.info("Initial loading finished")
+        self._log_data()
+
+    def _log_data(self):
+        file_names = [signal_data["file_name"] for sha, signal_data in self.data.items()]
+        self.logger.debug("Loaded {} ECGs: {}".format(len(self.data), ", ".join(file_names)))
 
     def _load_annotation_list(self):
         with open(self.annotation_list_path, encoding="utf-8") as json_data:
@@ -73,7 +80,7 @@ class Handler(RegexMatchingEventHandler):
         return np.isin(list(self.annotation_count_dict.keys()), annotation).astype(int)
 
     def _dump_annotation(self):
-        print("Dump call")
+        self.logger.info("Dump called")
         annotations = []
         for sha, signal_data in self.data.items():
             if signal_data["annotation"]:
@@ -99,8 +106,8 @@ class Handler(RegexMatchingEventHandler):
             if default not in annotations:
                 annotations.append(default)
         annotations = annotations[:N_TOP]
-        print("Common annotations:", annotations)
         data["annotations"] = annotations
+        self.logger.debug("Common annotations: {}".format(", ".join(annotations)))
         return dict(data=data, meta=meta)
 
     def _get_ecg_list(self, data, meta):
@@ -149,14 +156,14 @@ class Handler(RegexMatchingEventHandler):
 
     def on_created(self, event):
         src = os.path.basename(event.src_path)
-        print("File created: {}".format(src))
+        self.logger.info("File created: {}".format(src))
         self._update_data(event.src_path, retries=5)
-        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
+        self._log_data()
         self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_deleted(self, event):
         src = os.path.basename(event.src_path)
-        print("File deleted: {}".format(src))
+        self.logger.info("File deleted: {}".format(src))
         need_dump = False
         data = OrderedDict()
         for sha, signal_data in self.data.items():
@@ -170,7 +177,7 @@ class Handler(RegexMatchingEventHandler):
         if need_dump:
             self._dump_annotation()
             self.namespace.on_ECG_GET_COMMON_ANNOTATION_LIST({}, {})
-        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
+        self._log_data()
         self.namespace.on_ECG_GET_LIST({}, {})
 
     def on_moved(self, event):
@@ -182,7 +189,7 @@ class Handler(RegexMatchingEventHandler):
             return self.on_created(FileSystemEvent(event.dest_path))
         elif src_match and not dst_match:
             return self.on_deleted(FileSystemEvent(event.src_path))
-        print("File renamed: {} -> {}".format(src, dst))
+        self.logger.info("File renamed: {} -> {}".format(src, dst))
         need_dump = False
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] == src:
@@ -190,5 +197,5 @@ class Handler(RegexMatchingEventHandler):
                 need_dump = bool(signal_data["annotation"])
         if need_dump:
             self._dump_annotation()
-        print(len(self.data), [signal_data["file_name"] for sha, signal_data in self.data.items()])
+        self._log_data()
         self.namespace.on_ECG_GET_LIST({}, {})
