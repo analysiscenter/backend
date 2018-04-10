@@ -1,4 +1,3 @@
-import sys
 import json
 import logging
 import logging.config
@@ -60,7 +59,7 @@ def main():
     socketio = SocketIO(app)
     socketio.on_namespace(namespace)
 
-    logger.info("Run app")
+    logger.info("Server launched")
     socketio.run(app, port=9090)
 
 
