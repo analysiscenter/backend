@@ -1,6 +1,6 @@
 {
     "watch_dir": "C:\\SCS\\ServerA\\Data\\Inbox\\",
     "submitted_annotation_path": "C:\\SCS\\ServerA\\Data\\Inbox\\annotation.feather",
-    "annotation_list_path": ".\\annotation\\annotation_list.json",
-    "logger_config": ".\\annotation\\logger_config.json"
+    "annotation_list_path": ".\\api\\annotation\\annotation_list.json",
+    "logger_config": ".\\api\\annotation\\logger_config.json"
 }
