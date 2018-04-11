@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import logging
 from hashlib import sha256
 
 import numpy as np
@@ -31,10 +32,13 @@ def _convert_units(signal, meta, units):
 
 def _load_signal(path, retries=1, timeout=0.1):
     last_err = None
+    logger = logging.getLogger("server." + __name__)
+    logger.debug("Loading the file from {}".format(path))
     for _ in range(retries):
         try:
             signal, meta = load_xml_schiller(path, ["signal", "meta"])
         except Exception as err:
+            logger.debug("Loading failed, retrying after {} seconds".format(timeout))
             last_err = err
             time.sleep(timeout)
         else:
@@ -42,6 +46,7 @@ def _load_signal(path, retries=1, timeout=0.1):
             signal = signal.tolist()
             meta["units"] = meta["units"].tolist()
             meta["signame"] = meta["signame"].tolist()
+            logger.debug("Loading finished")
             return signal, meta
     else:
         raise last_err

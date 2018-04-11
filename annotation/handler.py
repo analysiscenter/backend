@@ -31,11 +31,13 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
 
     def _log_data(self):
         file_names = [signal_data["file_name"] for sha, signal_data in self.data.items()]
-        self.logger.debug("Loaded {} ECGs: {}".format(len(self.data), ", ".join(file_names)))
+        self.logger.debug("{} ECGs are stored: {}".format(len(self.data), ", ".join(file_names)))
 
     def _load_annotation_list(self):
         with open(self.annotation_list_path, encoding="utf-8") as json_data:
             self.annotation_dict = json.load(json_data, object_pairs_hook=OrderedDict)
+        if not self.annotation_dict:
+            raise ValueError("A list of possible ECG annotations can not be empty")
         self.annotation_count_dict = OrderedDict()
         for group, annotations in self.annotation_dict.items():
             if not annotations:
@@ -43,6 +45,8 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             else:
                 for annotation in annotations:
                     self.annotation_count_dict[group + "/" + annotation] = 0
+        debug_str = "{} groups with {} possible annotations are loaded"
+        self.logger.debug(debug_str.format(len(self.annotation_dict), len(self.annotation_count_dict)))
 
     def _load_data(self):
         path_gen = (os.path.join(self.watch_dir, f) for f in sorted(os.listdir(self.watch_dir))
@@ -52,6 +56,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
 
     def _load_submitted_annotation(self):
         if not os.path.isfile(self.submitted_annotation_path):
+            self.logger.debug("There are no submitted annotations")
             return
         df = pd.read_feather(self.submitted_annotation_path).set_index("index")
         counts = df.sum()
@@ -61,6 +66,11 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             if signal_data["file_name"] in df.index:
                 annotation = df.loc[signal_data["file_name"]]
                 signal_data["annotation"] = annotation[annotation != 0].index.tolist()
+        self.logger.debug("Submitted annotations for {} signals are loaded".format(np.sum(counts != 0)))
+
+    def _remove_file(self, path):
+        self.logger.debug("The same ECG already exists, deleting the file {}".format(path))
+        os.remove(path)
 
     def _update_data(self, path, retries=1, timeout=0.1):
         sha, signal_data = load_data(path, retries, timeout)
@@ -72,15 +82,14 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
                 signal_data["annotation"] = existing_data["annotation"]
                 self._dump_annotation()
             self.data[sha] = signal_data
-            os.remove(os.path.join(self.watch_dir, existing_data["file_name"]))
+            self._remove_file(os.path.join(self.watch_dir, existing_data["file_name"]))
         else:
-            os.remove(path)
+            self._remove_file(path)
 
     def _encode_annotation(self, annotation):
         return np.isin(list(self.annotation_count_dict.keys()), annotation).astype(int)
 
     def _dump_annotation(self):
-        self.logger.info("Dump called")
         annotations = []
         for sha, signal_data in self.data.items():
             if signal_data["annotation"]:
@@ -88,8 +97,10 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         if annotations:
             index, annotations = zip(*annotations)
             annotations = np.array(annotations)
+            self.logger.info("Dumping annotations for {}".format(", ".join(index)))
             df = pd.DataFrame(annotations, index=index, columns=list(self.annotation_count_dict.keys())).reset_index()
             df.to_feather(self.submitted_annotation_path)
+            self.logger.info("Dump finished")
 
     def _get_annotation_list(self, data, meta):
         data = [{"id": group, "annotations": annotations} for group, annotations in self.annotation_dict.items()]
@@ -107,7 +118,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
                 annotations.append(default)
         annotations = annotations[:N_TOP]
         data["annotations"] = annotations
-        self.logger.debug("Common annotations: {}".format(", ".join(annotations)))
+        self.logger.debug("Top {} most common annotations: {}".format(N_TOP, ", ".join(annotations)))
         return dict(data=data, meta=meta)
 
     def _get_ecg_list(self, data, meta):

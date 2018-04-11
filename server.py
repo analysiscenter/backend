@@ -7,18 +7,6 @@ from flask import Flask
 from flask_socketio import SocketIO
 
 
-def create_demo_namespace(args, logger):
-    logger.info("Creating demo namespace")
-    from demo.api import API_Namespace
-    return API_Namespace("/api")
-
-
-def create_annotation_namespace(args, logger):
-    logger.info("Creating annotation namespace")
-    from annotation.api import API_Namespace
-    return API_Namespace(args.watch_dir, args.submitted_annotation_path, args.annotation_list_path, "/api")
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="A backend for an ECG/CT demo and an ECG annotation tool.")
     subparsers = parser.add_subparsers(dest="launch_mode")
@@ -45,6 +33,18 @@ def create_logger(args):
     logging.config.dictConfig(logger_config)
     logger = logging.getLogger("server")
     return logger
+
+
+def create_demo_namespace(args, logger):
+    logger.info("Creating demo namespace")
+    from demo.api import API_Namespace
+    return API_Namespace("/api")
+
+
+def create_annotation_namespace(args, logger):
+    logger.info("Creating annotation namespace")
+    from annotation.api import API_Namespace
+    return API_Namespace(args.watch_dir, args.submitted_annotation_path, args.annotation_list_path, "/api")
 
 
 def create_namespace(args, logger):
