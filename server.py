@@ -30,7 +30,7 @@ def parse_demo_args(args):
     server_config = get_config(args.config, REQUIRED_KEYS)
     logger = create_logger(server_config["logger_config"])
     logger.info("Creating demo namespace")
-    from demo.api import API_Namespace
+    from api.demo.api import API_Namespace
     namespace = API_Namespace("/api")
     logger.info("Namespace created")
     return namespace, logger
@@ -41,7 +41,7 @@ def parse_annotation_args(args):
     server_config = get_config(args.config, REQUIRED_KEYS)
     logger = create_logger(server_config["logger_config"])
     logger.info("Creating annotation namespace")
-    from annotation.api import API_Namespace
+    from api.annotation.api import API_Namespace
     namespace = API_Namespace(server_config["watch_dir"], server_config["submitted_annotation_path"],
                               server_config["annotation_list_path"], "/api")
     logger.info("Namespace created")
