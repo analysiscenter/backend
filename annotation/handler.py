@@ -11,7 +11,7 @@ from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
 from .loader import load_data
 
 
-class Handler(RegexMatchingEventHandler):
+class EcgDirectoryHandler(RegexMatchingEventHandler):
     def __init__(self, namespace, watch_dir, submitted_annotation_path, annotation_list_path, *args, **kwargs):
         self.pattern = "^.+\.xml$"
         super().__init__([self.pattern], *args, **kwargs)

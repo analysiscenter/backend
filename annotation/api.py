@@ -4,15 +4,15 @@ from flask import request
 from flask_socketio import Namespace
 from watchdog.observers import Observer
 
-from .handler import Handler
+from .handler import EcgDirectoryHandler
 
 
 class API_Namespace(Namespace):
     def __init__(self, watch_dir, submitted_annotation_path, annotation_list_path, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.logger = logging.getLogger("server." + __name__)
-        self.handler = Handler(self, watch_dir, submitted_annotation_path, annotation_list_path,
-                               ignore_directories=True)
+        self.handler = EcgDirectoryHandler(self, watch_dir, submitted_annotation_path, annotation_list_path,
+                                           ignore_directories=True)
         observer = Observer()
         observer.schedule(self.handler, watch_dir)
         observer.start()
@@ -30,7 +30,7 @@ class API_Namespace(Namespace):
             payload = method(data, meta)
             if event_out is not None:
                 self.emit(event_out, payload)
-                self.logger.info("Sending response {}".format(event_out))
+                self.logger.info("Sending response {}. Meta: {}".format(event_out, meta))
         except Exception as error:
             self.emit("ERROR", str(error))
             self.logger.exception(error)
