@@ -7,12 +7,14 @@ from flask import Flask
 from flask_socketio import SocketIO
 
 
-def create_demo_namespace(args):
+def create_demo_namespace(args, logger):
+    logger.info("Creating demo namespace")
     from demo.api import API_Namespace
     return API_Namespace("/api")
 
 
-def create_annotation_namespace(args):
+def create_annotation_namespace(args, logger):
+    logger.info("Creating annotation namespace")
     from annotation.api import API_Namespace
     return API_Namespace(args.watch_dir, args.submitted_annotation_path, args.annotation_list_path, "/api")
 
@@ -45,15 +47,16 @@ def create_logger(args):
     return logger
 
 
-def create_namespace(args):
-    namespace = args.func(args)
+def create_namespace(args, logger):
+    namespace = args.func(args, logger)
+    logger.info("Namespace created")
     return namespace
 
 
 def main():
     args = parse_args()
     logger = create_logger(args)
-    namespace = create_namespace(args)
+    namespace = create_namespace(args, logger)
 
     app = Flask(__name__)
     socketio = SocketIO(app)

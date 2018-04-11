@@ -16,7 +16,6 @@ class API_Namespace(Namespace):
         observer = Observer()
         observer.schedule(self.handler, watch_dir)
         observer.start()
-        self.logger.info("Namespace created")
 
     def on_connect(self):
         self.logger.info("User connected {}".format(request.sid))
