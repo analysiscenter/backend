@@ -1,0 +1,6 @@
+{
+    "watch_dir": "C:\\SCS\\ServerA\\Data\\Inbox\\",
+    "submitted_annotation_path": "C:\\SCS\\ServerA\\Data\\Inbox\\annotation.feather",
+    "annotation_list_path": "annotation_list.json",
+    "logger_config": "logger_config.json"
+}
