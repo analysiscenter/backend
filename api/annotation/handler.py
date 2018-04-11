@@ -108,7 +108,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
 
     def _get_common_annotation_list(self, data, meta):
         N_TOP = 5
-        STOPWORDS = ["Другое"]
+        STOPWORDS = ["Неинтерпретируемая ЭКГ", "Другая патология", "Другая патология из этой группы"]
         DEFAULTS = ["Нормальный ритм"]
         positive_count = {annotation: count for annotation, count in self.annotation_count_dict.items()
                           if count > 0 and not any(word in annotation for word in STOPWORDS)}
