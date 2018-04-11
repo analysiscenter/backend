@@ -1,3 +1,5 @@
+import logging
+
 from flask import request
 from flask_socketio import Namespace
 
@@ -12,40 +14,39 @@ ct = CtController()
 class API_Namespace(Namespace):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print("Namespace created")
+        self.logger = logging.getLogger("server." + __name__)
 
     def on_connect(self):
-        print("User connected", request, request.sid)
-        pass
+        self.logger.info("User connected {}".format(request.sid))
 
     def on_disconnect(self):
-        print("User disconnected", request, request.sid)
-        pass
+        self.logger.info("User disconnected {}".format(request.sid))
 
     def _call_controller_method(self, method, event_in, event_out, data, meta):
-        print(event_in, data, meta)
+        self.logger.info("Handling event {}. Data: {}. Meta: {}.".format(event_in, data, meta))
         try:
             payload = method(data, meta)
-        except Exception as e:
-            print("ERROR", method.__name__, data, meta)
-            self.emit("ERROR", str(e))
+        except Exception as error:
+            self.emit("ERROR", str(error))
+            self.logger.exception(error)
         else:
             self.emit(event_out, payload)
+            self.logger.info("Sending response {}. Meta: {}".format(event_out, meta))
 
     def on_ECG_GET_LIST(self, data, meta):
-        self._call_controller_method(ecg.get_list, "ECG GET LIST", "ECG_GOT_LIST", data, meta)
+        self._call_controller_method(ecg.get_list, "ECG_GET_LIST", "ECG_GOT_LIST", data, meta)
 
     def on_ECG_GET_ITEM_DATA(self, data, meta):
-        self._call_controller_method(ecg.get_item_data, "ECG GET ITEM DATA", "ECG_GOT_ITEM_DATA", data, meta)
+        self._call_controller_method(ecg.get_item_data, "ECG_GET_ITEM_DATA", "ECG_GOT_ITEM_DATA", data, meta)
 
     def on_ECG_GET_INFERENCE(self, data, meta):
-        self._call_controller_method(ecg.get_inference, "ECG GET INFERENCE", "ECG_GOT_INFERENCE", data, meta)
+        self._call_controller_method(ecg.get_inference, "ECG_GET_INFERENCE", "ECG_GOT_INFERENCE", data, meta)
 
     def on_CT_GET_LIST(self, data, meta):
-        self._call_controller_method(ct.get_list, "CT GET LIST", "CT_GOT_LIST", data, meta)
+        self._call_controller_method(ct.get_list, "CT_GET_LIST", "CT_GOT_LIST", data, meta)
 
     def on_CT_GET_ITEM_DATA(self, data, meta):
-        self._call_controller_method(ct.get_item_data, "CT GET ITEM DATA", "CT_GOT_ITEM_DATA", data, meta)
+        self._call_controller_method(ct.get_item_data, "CT_GET_ITEM_DATA", "CT_GOT_ITEM_DATA", data, meta)
 
     def on_CT_GET_INFERENCE(self, data, meta):
-        self._call_controller_method(ct.get_inference, "CT GET INFERENCE", "CT_GOT_INFERENCE", data, meta)
+        self._call_controller_method(ct.get_inference, "CT_GET_INFERENCE", "CT_GOT_INFERENCE", data, meta)
