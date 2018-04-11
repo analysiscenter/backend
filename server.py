@@ -54,13 +54,13 @@ def parse_args():
     subparsers.required = True
 
     parser_demo = subparsers.add_parser("demo", help="Launch an ECG/CT demo")
-    parser_demo.add_argument("-c", "--config", default=os.path.join(".", "demo", "server_config.json"),
-                             help="A path to a json file with server configuration")
+    parser_demo.add_argument("-c", "--config", help="A path to a json file with server configuration",
+                             default=os.path.join(".", "api", "demo", "server_config.json"))
     parser_demo.set_defaults(parse=parse_demo_args)
 
     parser_annotation = subparsers.add_parser("annotation", help="Launch an ECG annotation tool")
-    parser_annotation.add_argument("-c", "--config", default=os.path.join(".", "annotation", "server_config.json"),
-                                   help="A path to a json file with server configuration")
+    parser_annotation.add_argument("-c", "--config", help="A path to a json file with server configuration",
+                                   default=os.path.join(".", "api", "annotation", "server_config.json"))
     parser_annotation.set_defaults(parse=parse_annotation_args)
 
     args = parser.parse_args()
