@@ -1,9 +1,9 @@
-from .ecg_controller import EcgController
+#from .ecg_controller import EcgController
 from .ct_controller import CtController
 from ..api_base import BaseNamespace
 
 # init controller objects
-ecg = EcgController()
+#ecg = EcgController()
 ct = CtController()
 
 

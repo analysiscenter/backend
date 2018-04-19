@@ -2,8 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 
-from .lung_cancer.dataset import FilesIndex, Pipeline, Dataset
-from .lung_cancer import CTImagesMaskedBatch as CTIMB
+from .lung_cancer.radio.dataset import FilesIndex, Pipeline, Dataset
+from .lung_cancer.radio import CTImagesMaskedBatch as CTIMB
 
 CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
 
