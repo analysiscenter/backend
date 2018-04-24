@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
+from watchdog.observers import Observer
 from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
 
 from .loader import load_data
@@ -28,6 +29,12 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self._load_submitted_annotation()
         self.logger.info("Initial loading finished")
         self._log_data()
+
+        self.logger.info("Launching directory observer")
+        self.observer = Observer()
+        self.observer.schedule(self, self.watch_dir)
+        self.observer.start()
+        self.logger.info("Directory observer launched")
 
     def _log_data(self):
         file_names = [signal_data["file_name"] for sha, signal_data in self.data.items()]
