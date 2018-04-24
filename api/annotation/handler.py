@@ -137,7 +137,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             if default not in annotations:
                 annotations.append(default)
         annotations = annotations[:N_TOP]
-        data["annotations"] = annotations
+        data = {"annotations": annotations}
         self.logger.debug("Top {} most common annotations: {}".format(N_TOP, ", ".join(annotations)))
         return dict(data=data, meta=meta)
 
