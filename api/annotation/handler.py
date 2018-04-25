@@ -1,8 +1,11 @@
 import os
 import re
+import stat
 import json
+import shutil
 import logging
 import threading
+from datetime import datetime
 from collections import OrderedDict
 
 import numpy as np
@@ -21,13 +24,16 @@ def synchronized(method):
 
 
 class EcgDirectoryHandler(RegexMatchingEventHandler):
-    def __init__(self, namespace, watch_dir, submitted_annotation_path, annotation_list_path, *args, **kwargs):
+    def __init__(self, namespace, watch_dir, dump_dir, annotation_list_path, annotation_count_path,
+                 submitted_annotation_path, *args, **kwargs):
         self.pattern = "^.+\.xml$"
         super().__init__([self.pattern], *args, **kwargs)
         self.namespace = namespace
         self.watch_dir = watch_dir
-        self.submitted_annotation_path = submitted_annotation_path
+        self.dump_dir = dump_dir
         self.annotation_list_path = annotation_list_path
+        self.annotation_count_path = annotation_count_path
+        self.submitted_annotation_path = submitted_annotation_path
         self.logger = logging.getLogger("server." + __name__)
         self.lock = threading.RLock()
 
@@ -38,6 +44,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self.logger.info("Initial loading started")
         self._load_annotation_list()
         self._load_data()
+        self._load_annotation_count()
         self._load_submitted_annotation()
         self.logger.info("Initial loading finished")
         self._log_data()
@@ -71,6 +78,10 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
                     if re.match(self.pattern, f) is not None)
         for path in path_gen:
             self._update_data(path)
+
+    def _load_annotation_count(self):
+        # TODO: load counts
+        pass
 
     def _load_submitted_annotation(self):
         if not os.path.isfile(self.submitted_annotation_path):
@@ -112,13 +123,15 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         for sha, signal_data in self.data.items():
             if signal_data["annotation"]:
                 annotations.append((signal_data["file_name"], self._encode_annotation(signal_data["annotation"])))
-        if annotations:
-            index, annotations = zip(*annotations)
-            annotations = np.array(annotations)
-            self.logger.info("Dumping annotations for {}".format(", ".join(index)))
-            df = pd.DataFrame(annotations, index=index, columns=list(self.annotation_count_dict.keys())).reset_index()
-            df.to_feather(self.submitted_annotation_path)
-            self.logger.info("Dump finished")
+        if not annotations:
+            self.logger.info("No annotation to dump")
+            return
+        index, annotations = zip(*annotations)
+        annotations = np.array(annotations)
+        self.logger.info("Dumping annotations for {}".format(", ".join(index)))
+        df = pd.DataFrame(annotations, index=index, columns=list(self.annotation_count_dict.keys())).reset_index()
+        df.to_feather(self.submitted_annotation_path)
+        self.logger.info("Dump finished into {}".format(self.submitted_annotation_path))
 
     @synchronized
     def _get_annotation_list(self, data, meta):
@@ -187,6 +200,30 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             self.annotation_count_dict[new_annotation] += 1
         self._dump_annotation()
         self.namespace.on_ECG_GET_COMMON_ANNOTATION_LIST({}, {})
+
+    @synchronized
+    def _dump_signals(self):
+        # TODO: dump counts
+        annotated_signals = [signal_data["file_name"] for sha, signal_data in self.data.items()
+                             if signal_data["annotation"]]
+        if not annotated_signals:
+            self.logger.info("No annotated signals to dump")
+            return
+        self.logger.info("Dumping the following signals: {}".format(", ".join(annotated_signals)))
+        dir_name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        dump_dir = os.path.join(self.dump_dir, dir_name)
+        os.makedirs(dump_dir)
+        annotation_file = os.path.basename(self.submitted_annotation_path)
+        shutil.move(self.submitted_annotation_path, os.path.join(dump_dir, annotation_file))
+        for file_name in annotated_signals:
+            shutil.move(os.path.join(self.watch_dir, file_name), os.path.join(dump_dir, file_name))
+        archive_name = shutil.make_archive(dump_dir, "zip", dump_dir)
+
+        def remove_readonly(func, path, _):
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        shutil.rmtree(dump_dir, onerror=remove_readonly)
+        self.logger.info("Dump finished into {}".format(archive_name))
 
     @synchronized
     def on_created(self, event):
