@@ -40,6 +40,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self.data = OrderedDict()
         self.annotation_dict = {}
         self.annotation_count_dict = OrderedDict()
+        self.dumped_signals = set()
 
         self.logger.info("Initial loading started")
         self._load_annotation_list()
@@ -204,19 +205,27 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
     @synchronized
     def _dump_signals(self):
         # TODO: dump counts
-        annotated_signals = [signal_data["file_name"] for sha, signal_data in self.data.items()
-                             if signal_data["annotation"]]
+        annotated_signals = {signal_data["file_name"] for sha, signal_data in self.data.items()
+                             if signal_data["annotation"]}
         if not annotated_signals:
             self.logger.info("No annotated signals to dump")
             return
-        self.logger.info("Dumping the following signals: {}".format(", ".join(annotated_signals)))
+        self.logger.info("Dumping the following signals: {}".format(", ".join(sorted(annotated_signals))))
+        self.dumped_signals |= annotated_signals
         dir_name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         dump_dir = os.path.join(self.dump_dir, dir_name)
         os.makedirs(dump_dir)
         annotation_file = os.path.basename(self.submitted_annotation_path)
         shutil.move(self.submitted_annotation_path, os.path.join(dump_dir, annotation_file))
-        for file_name in annotated_signals:
-            shutil.move(os.path.join(self.watch_dir, file_name), os.path.join(dump_dir, file_name))
+
+        data = OrderedDict()
+        for sha, signal_data in self.data.items():
+            if signal_data["annotation"]:
+                shutil.move(os.path.join(self.watch_dir, signal_data["file_name"]),
+                            os.path.join(dump_dir, signal_data["file_name"]))
+            else:
+                data[sha] = signal_data
+        self.data = data
         archive_name = shutil.make_archive(dump_dir, "zip", dump_dir)
 
         def remove_readonly(func, path, _):
@@ -224,6 +233,8 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             func(path)
         shutil.rmtree(dump_dir, onerror=remove_readonly)
         self.logger.info("Dump finished into {}".format(archive_name))
+        self._log_data()
+        self.namespace.on_ECG_GET_LIST({}, {})
 
     @synchronized
     def on_created(self, event):
@@ -236,6 +247,9 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
     @synchronized
     def on_deleted(self, event):
         src = os.path.basename(event.src_path)
+        if src in self.dumped_signals:
+            self.dumped_signals.remove(src)
+            return
         self.logger.info("File deleted: {}".format(src))
         need_dump = False
         data = OrderedDict()
