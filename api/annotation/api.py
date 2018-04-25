@@ -1,5 +1,3 @@
-from watchdog.observers import Observer
-
 from .handler import EcgDirectoryHandler
 from ..api_base import BaseNamespace
 
@@ -9,9 +7,6 @@ class AnnotationNamespace(BaseNamespace):
         super().__init__(*args, **kwargs)
         self.handler = EcgDirectoryHandler(self, watch_dir, submitted_annotation_path, annotation_list_path,
                                            ignore_directories=True)
-        observer = Observer()
-        observer.schedule(self.handler, watch_dir)
-        observer.start()
 
     def on_ECG_GET_ANNOTATION_LIST(self, data, meta):
         self._safe_call(self.handler._get_annotation_list, data, meta, "ECG_GET_ANNOTATION_LIST",

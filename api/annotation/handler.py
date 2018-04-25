@@ -2,13 +2,22 @@ import os
 import re
 import json
 import logging
+import threading
 from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
+from watchdog.observers import Observer
 from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
 
 from .loader import load_data
+
+
+def synchronized(method):
+    def decorated(self, *args, **kwargs):
+        with self.lock:
+            return method(self, *args, **kwargs)
+    return decorated
 
 
 class EcgDirectoryHandler(RegexMatchingEventHandler):
@@ -20,7 +29,11 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self.submitted_annotation_path = submitted_annotation_path
         self.annotation_list_path = annotation_list_path
         self.logger = logging.getLogger("server." + __name__)
+        self.lock = threading.RLock()
+
         self.data = OrderedDict()
+        self.annotation_dict = {}
+        self.annotation_count_dict = OrderedDict()
 
         self.logger.info("Initial loading started")
         self._load_annotation_list()
@@ -28,6 +41,12 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self._load_submitted_annotation()
         self.logger.info("Initial loading finished")
         self._log_data()
+
+        self.logger.info("Launching directory observer")
+        self.observer = Observer()
+        self.observer.schedule(self, self.watch_dir)
+        self.observer.start()
+        self.logger.info("Directory observer launched")
 
     def _log_data(self):
         file_names = [signal_data["file_name"] for sha, signal_data in self.data.items()]
@@ -38,7 +57,6 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             self.annotation_dict = json.load(json_data, object_pairs_hook=OrderedDict)
         if not self.annotation_dict:
             raise ValueError("A list of possible ECG annotations can not be empty")
-        self.annotation_count_dict = OrderedDict()
         for group, annotations in self.annotation_dict.items():
             if not annotations:
                 self.annotation_count_dict[group] = 0
@@ -102,10 +120,12 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             df.to_feather(self.submitted_annotation_path)
             self.logger.info("Dump finished")
 
+    @synchronized
     def _get_annotation_list(self, data, meta):
         data = [{"id": group, "annotations": annotations} for group, annotations in self.annotation_dict.items()]
         return dict(data=data, meta=meta)
 
+    @synchronized
     def _get_common_annotation_list(self, data, meta):
         N_TOP = 5
         STOPWORDS = ["Неинтерпретируемая ЭКГ", "Другая патология", "Другая патология из этой группы"]
@@ -117,10 +137,11 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             if default not in annotations:
                 annotations.append(default)
         annotations = annotations[:N_TOP]
-        data["annotations"] = annotations
+        data = {"annotations": annotations}
         self.logger.debug("Top {} most common annotations: {}".format(N_TOP, ", ".join(annotations)))
         return dict(data=data, meta=meta)
 
+    @synchronized
     def _get_ecg_list(self, data, meta):
         ecg_list = []
         for sha, signal_data in self.data.items():
@@ -135,6 +156,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             ecg_data["timestamp"] = ecg_data["timestamp"].strftime("%d.%m.%Y %H:%M:%S")
         return dict(data=ecg_list, meta=meta)
 
+    @synchronized
     def _get_item_data(self, data, meta):
         sha = data.get("id")
         if sha is None or sha not in self.data:
@@ -147,6 +169,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         data["annotation"] = signal_data["annotation"]
         return dict(data=data, meta=meta)
 
+    @synchronized
     def _set_annotation(self, data, meta):
         sha = data.get("id")
         if sha is None or sha not in self.data:
@@ -165,6 +188,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self._dump_annotation()
         self.namespace.on_ECG_GET_COMMON_ANNOTATION_LIST({}, {})
 
+    @synchronized
     def on_created(self, event):
         src = os.path.basename(event.src_path)
         self.logger.info("File created: {}".format(src))
@@ -172,6 +196,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self._log_data()
         self.namespace.on_ECG_GET_LIST({}, {})
 
+    @synchronized
     def on_deleted(self, event):
         src = os.path.basename(event.src_path)
         self.logger.info("File deleted: {}".format(src))
@@ -191,6 +216,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self._log_data()
         self.namespace.on_ECG_GET_LIST({}, {})
 
+    @synchronized
     def on_moved(self, event):
         src = os.path.basename(event.src_path)
         src_match = re.match(self.pattern, src) is not None
