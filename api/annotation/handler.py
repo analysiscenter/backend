@@ -81,8 +81,14 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             self._update_data(path)
 
     def _load_annotation_count(self):
-        # TODO: load counts
-        pass
+        if not os.path.isfile(self.annotation_count_path):
+            self.logger.debug("There is no annotation count file")
+            return
+        with open(self.annotation_count_path, encoding="utf-8") as json_data:
+            annotation_count_dict = json.load(json_data)
+        for annotation in self.annotation_count_dict:
+            self.annotation_count_dict[annotation] += annotation_count_dict.get(annotation, 0)
+        self.logger.debug("Counts for submitted annotations are loaded")
 
     def _load_submitted_annotation(self):
         if not os.path.isfile(self.submitted_annotation_path):
@@ -91,7 +97,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         df = pd.read_feather(self.submitted_annotation_path).set_index("index")
         counts = df.sum()
         for annotation in self.annotation_count_dict:
-            self.annotation_count_dict[annotation] = counts.get(annotation, 0)
+            self.annotation_count_dict[annotation] += counts.get(annotation, 0).item()
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] in df.index:
                 annotation = df.loc[signal_data["file_name"]]
@@ -204,7 +210,6 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
 
     @synchronized
     def _dump_signals(self):
-        # TODO: dump counts
         annotated_signals = {signal_data["file_name"] for sha, signal_data in self.data.items()
                              if signal_data["annotation"]}
         if not annotated_signals:
@@ -232,6 +237,10 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             os.chmod(path, stat.S_IWRITE)
             func(path)
         shutil.rmtree(dump_dir, onerror=remove_readonly)
+
+        with open(self.annotation_count_path, "w", encoding="utf-8") as json_data:
+            json.dump(self.annotation_count_dict, json_data)
+
         self.logger.info("Dump finished into {}".format(archive_name))
         self._log_data()
         self.namespace.on_ECG_GET_LIST({}, {})
