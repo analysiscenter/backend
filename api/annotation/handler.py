@@ -97,7 +97,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         df = pd.read_feather(self.submitted_annotation_path).set_index("index")
         counts = df.sum()
         for annotation in self.annotation_count_dict:
-            self.annotation_count_dict[annotation] += counts.get(annotation, 0).item()
+            self.annotation_count_dict[annotation] += int(counts.get(annotation, 0))
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] in df.index:
                 annotation = df.loc[signal_data["file_name"]]
@@ -209,7 +209,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self.namespace.on_ECG_GET_COMMON_ANNOTATION_LIST({}, {})
 
     @synchronized
-    def _dump_signals(self):
+    def _dump_signals(self, data, meta):
         annotated_signals = {signal_data["file_name"] for sha, signal_data in self.data.items()
                              if signal_data["annotation"]}
         if not annotated_signals:
