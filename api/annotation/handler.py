@@ -168,7 +168,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             ecg_data = {
                 "id": sha,
                 "timestamp": signal_data["meta"]["timestamp"],
-                "is_annotated": bool(signal_data["annotation"]),
+                "isAnnotated": bool(signal_data["annotation"]),
             }
             ecg_list.append(ecg_data)
         ecg_list = sorted(ecg_list, key=lambda val: val["timestamp"], reverse=True)
