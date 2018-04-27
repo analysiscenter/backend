@@ -1,8 +1,11 @@
 import os
 import re
+import stat
 import json
+import shutil
 import logging
 import threading
+from datetime import datetime
 from collections import OrderedDict
 
 import numpy as np
@@ -21,23 +24,28 @@ def synchronized(method):
 
 
 class EcgDirectoryHandler(RegexMatchingEventHandler):
-    def __init__(self, namespace, watch_dir, submitted_annotation_path, annotation_list_path, *args, **kwargs):
+    def __init__(self, namespace, watch_dir, dump_dir, annotation_list_path, annotation_count_path,
+                 submitted_annotation_path, *args, **kwargs):
         self.pattern = "^.+\.xml$"
         super().__init__([self.pattern], *args, **kwargs)
         self.namespace = namespace
         self.watch_dir = watch_dir
-        self.submitted_annotation_path = submitted_annotation_path
+        self.dump_dir = dump_dir
         self.annotation_list_path = annotation_list_path
+        self.annotation_count_path = annotation_count_path
+        self.submitted_annotation_path = submitted_annotation_path
         self.logger = logging.getLogger("server." + __name__)
         self.lock = threading.RLock()
 
         self.data = OrderedDict()
         self.annotation_dict = {}
         self.annotation_count_dict = OrderedDict()
+        self.dumped_signals = set()
 
         self.logger.info("Initial loading started")
         self._load_annotation_list()
         self._load_data()
+        self._load_annotation_count()
         self._load_submitted_annotation()
         self.logger.info("Initial loading finished")
         self._log_data()
@@ -72,6 +80,16 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         for path in path_gen:
             self._update_data(path)
 
+    def _load_annotation_count(self):
+        if not os.path.isfile(self.annotation_count_path):
+            self.logger.debug("There is no annotation count file")
+            return
+        with open(self.annotation_count_path, encoding="utf-8") as json_data:
+            annotation_count_dict = json.load(json_data)
+        for annotation in self.annotation_count_dict:
+            self.annotation_count_dict[annotation] += annotation_count_dict.get(annotation, 0)
+        self.logger.debug("Counts for submitted annotations are loaded")
+
     def _load_submitted_annotation(self):
         if not os.path.isfile(self.submitted_annotation_path):
             self.logger.debug("There are no submitted annotations")
@@ -79,12 +97,20 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         df = pd.read_feather(self.submitted_annotation_path).set_index("index")
         counts = df.sum()
         for annotation in self.annotation_count_dict:
-            self.annotation_count_dict[annotation] = counts.get(annotation, 0)
+            self.annotation_count_dict[annotation] += int(counts.get(annotation, 0))
+        n_loaded = 0
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] in df.index:
                 annotation = df.loc[signal_data["file_name"]]
-                signal_data["annotation"] = annotation[annotation != 0].index.tolist()
-        self.logger.debug("Submitted annotations for {} signals are loaded".format(np.sum(counts != 0)))
+                annotation = annotation[annotation != 0].index.tolist()
+                diff = sorted(set(annotation) - set(self.annotation_count_dict.keys()))
+                if diff:
+                    debug_str = "Submitted annotation for signal {} contains unknown values {} and will not be used"
+                    self.logger.debug(debug_str.format(signal_data["file_name"], ", ".join(diff)))
+                else:
+                    signal_data["annotation"] = annotation
+                    n_loaded += 1
+        self.logger.debug("Submitted annotations for {} signals are loaded".format(n_loaded))
 
     def _remove_file(self, path):
         self.logger.debug("The same ECG already exists, deleting the file {}".format(path))
@@ -112,13 +138,15 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         for sha, signal_data in self.data.items():
             if signal_data["annotation"]:
                 annotations.append((signal_data["file_name"], self._encode_annotation(signal_data["annotation"])))
-        if annotations:
-            index, annotations = zip(*annotations)
-            annotations = np.array(annotations)
-            self.logger.info("Dumping annotations for {}".format(", ".join(index)))
-            df = pd.DataFrame(annotations, index=index, columns=list(self.annotation_count_dict.keys())).reset_index()
-            df.to_feather(self.submitted_annotation_path)
-            self.logger.info("Dump finished")
+        if not annotations:
+            self.logger.info("No annotation to dump")
+            return
+        index, annotations = zip(*annotations)
+        annotations = np.array(annotations)
+        self.logger.info("Dumping annotations for {}".format(", ".join(index)))
+        df = pd.DataFrame(annotations, index=index, columns=list(self.annotation_count_dict.keys())).reset_index()
+        df.to_feather(self.submitted_annotation_path)
+        self.logger.info("Dump finished into {}".format(self.submitted_annotation_path))
 
     @synchronized
     def _get_annotation_list(self, data, meta):
@@ -148,7 +176,7 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
             ecg_data = {
                 "id": sha,
                 "timestamp": signal_data["meta"]["timestamp"],
-                "is_annotated": bool(signal_data["annotation"]),
+                "isAnnotated": bool(signal_data["annotation"]),
             }
             ecg_list.append(ecg_data)
         ecg_list = sorted(ecg_list, key=lambda val: val["timestamp"], reverse=True)
@@ -189,6 +217,43 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         self.namespace.on_ECG_GET_COMMON_ANNOTATION_LIST({}, {})
 
     @synchronized
+    def _dump_signals(self, data, meta):
+        annotated_signals = {signal_data["file_name"] for sha, signal_data in self.data.items()
+                             if signal_data["annotation"]}
+        if not annotated_signals:
+            self.logger.info("No annotated signals to dump")
+            return
+        self.logger.info("Dumping the following signals: {}".format(", ".join(sorted(annotated_signals))))
+        self.dumped_signals |= annotated_signals
+        dir_name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        dump_dir = os.path.join(self.dump_dir, dir_name)
+        os.makedirs(dump_dir)
+        annotation_file = os.path.basename(self.submitted_annotation_path)
+        shutil.move(self.submitted_annotation_path, os.path.join(dump_dir, annotation_file))
+
+        data = OrderedDict()
+        for sha, signal_data in self.data.items():
+            if signal_data["annotation"]:
+                shutil.move(os.path.join(self.watch_dir, signal_data["file_name"]),
+                            os.path.join(dump_dir, signal_data["file_name"]))
+            else:
+                data[sha] = signal_data
+        self.data = data
+        archive_name = shutil.make_archive(dump_dir, "zip", dump_dir)
+
+        def remove_readonly(func, path, _):
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        shutil.rmtree(dump_dir, onerror=remove_readonly)
+
+        with open(self.annotation_count_path, "w", encoding="utf-8") as json_data:
+            json.dump(self.annotation_count_dict, json_data)
+
+        self.logger.info("Dump finished into {}".format(archive_name))
+        self._log_data()
+        self.namespace.on_ECG_GET_LIST({}, {})
+
+    @synchronized
     def on_created(self, event):
         src = os.path.basename(event.src_path)
         self.logger.info("File created: {}".format(src))
@@ -199,6 +264,9 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
     @synchronized
     def on_deleted(self, event):
         src = os.path.basename(event.src_path)
+        if src in self.dumped_signals:
+            self.dumped_signals.remove(src)
+            return
         self.logger.info("File deleted: {}".format(src))
         need_dump = False
         data = OrderedDict()

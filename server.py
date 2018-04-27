@@ -37,13 +37,21 @@ def parse_demo_args(args):
 
 
 def parse_annotation_args(args):
-    REQUIRED_KEYS = {"watch_dir", "submitted_annotation_path", "annotation_list_path", "logger_config"}
+    REQUIRED_KEYS = {
+        "watch_dir",
+        "dump_dir",
+        "annotation_list_path",
+        "annotation_count_path",
+        "submitted_annotation_path",
+        "logger_config",
+    }
     server_config = get_config(args.config, REQUIRED_KEYS)
     logger = create_logger(server_config["logger_config"])
     logger.info("Creating annotation namespace")
     from api.annotation.api import AnnotationNamespace as Namespace
-    namespace = Namespace(server_config["watch_dir"], server_config["submitted_annotation_path"],
-                          server_config["annotation_list_path"], "/api")
+    namespace = Namespace(server_config["watch_dir"], server_config["dump_dir"],
+                          server_config["annotation_list_path"], server_config["annotation_count_path"],
+                          server_config["submitted_annotation_path"], "/api")
     logger.info("Namespace created")
     return namespace, logger
 
