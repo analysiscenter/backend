@@ -98,11 +98,19 @@ class EcgDirectoryHandler(RegexMatchingEventHandler):
         counts = df.sum()
         for annotation in self.annotation_count_dict:
             self.annotation_count_dict[annotation] += int(counts.get(annotation, 0))
+        n_loaded = 0
         for sha, signal_data in self.data.items():
             if signal_data["file_name"] in df.index:
                 annotation = df.loc[signal_data["file_name"]]
-                signal_data["annotation"] = annotation[annotation != 0].index.tolist()
-        self.logger.debug("Submitted annotations for {} signals are loaded".format(np.sum(counts != 0)))
+                annotation = annotation[annotation != 0].index.tolist()
+                diff = sorted(set(annotation) - set(self.annotation_count_dict.keys()))
+                if diff:
+                    debug_str = "Submitted annotation for signal {} contains unknown values {} and will not be used"
+                    self.logger.debug(debug_str.format(signal_data["file_name"], ", ".join(diff)))
+                else:
+                    signal_data["annotation"] = annotation
+                    n_loaded += 1
+        self.logger.debug("Submitted annotations for {} signals are loaded".format(n_loaded))
 
     def _remove_file(self, path):
         self.logger.debug("The same ECG already exists, deleting the file {}".format(path))
